@@ -6,7 +6,6 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_REDIRECT_URI
 );
 
-// Calendar IDs
 const MY_CAL = 'nbradley@645ventures.com';
 const AARON_CAL = 'aholidayiii@645ventures.com';
 const PERSONAL_CAL = 'natashapbradley@gmail.com';
@@ -28,54 +27,52 @@ function parseCookies(req) {
 }
 
 module.exports = async (req, res) => {
- // Prevent CDN caching — force fresh data every time
-res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-res.setHeader('Pragma', 'no-cache');
-res.setHeader('Expires', '0');
-res.setHeader('Access-Control-Allow-Origin', '*');
-res.setHeader('Access-Control-Allow-Methods', 'GET');
-  
-  // Parse token from cookie
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET');
+
   const cookies = parseCookies(req);
   const tokenCookie = cookies['gcal_tokens'];
-  
+
   if (!tokenCookie) {
     return res.status(401).json({ error: 'Not authenticated', needsAuth: true });
   }
-  
+
   try {
     const tokens = JSON.parse(Buffer.from(tokenCookie, 'base64').toString('utf8'));
     oauth2Client.setCredentials(tokens);
-    
-    // Auto-refresh if token expired
+
     oauth2Client.on('tokens', (newTokens) => {
-      if (newTokens.refresh_token) {
-        tokens.refresh_token = newTokens.refresh_token;
-      }
+      if (newTokens.refresh_token) tokens.refresh_token = newTokens.refresh_token;
       tokens.access_token = newTokens.access_token;
     });
-    
-    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-    
-    // Time range: today
-    const now = new Date();
-    
-const nyDate = new Intl.DateTimeFormat('en-CA', { 
-  timeZone: 'America/New_York',
-  year: 'numeric', month: '2-digit', day: '2-digit'
-}).format(now);
 
-const timeMin = `${nyDate}T00:00:00-04:00`;
-const timeMax = `${nyDate}T23:59:59-04:00`;
-    
-    // Fetch from all calendars in parallel
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+    const now = new Date();
+
+    // Wide window: yesterday 7pm UTC to tomorrow 7am UTC
+    // This covers all of today in New York time regardless of DST
+    const startUTC = new Date(now);
+    startUTC.setUTCHours(0, 0, 0, 0);
+    startUTC.setUTCHours(startUTC.getUTCHours() - 5);
+
+    const endUTC = new Date(now);
+    endUTC.setUTCHours(23, 59, 59, 999);
+    endUTC.setUTCHours(endUTC.getUTCHours() + 5);
+
+    const timeMin = startUTC.toISOString();
+    const timeMax = endUTC.toISOString();
+
     const calendarIds = [
       { id: MY_CAL, label: 'mine' },
       { id: AARON_CAL, label: 'aaron' },
       { id: PERSONAL_CAL, label: 'personal' },
       { id: FAYE_CAL, label: 'faye' }
     ];
-    
+
     const results = await Promise.allSettled(
       calendarIds.map(async ({ id, label }) => {
         const response = await calendar.events.list({
@@ -84,13 +81,13 @@ const timeMax = `${nyDate}T23:59:59-04:00`;
           timeMax,
           singleEvents: true,
           orderBy: 'startTime',
-          maxResults: 20
+          maxResults: 20,
+          timeZone: 'America/New_York'
         });
         return { label, events: response.data.items || [] };
       })
     );
-    
-    // Process results
+
     const calendarData = {};
     results.forEach((result, i) => {
       const label = calendarIds[i].label;
@@ -98,37 +95,43 @@ const timeMax = `${nyDate}T23:59:59-04:00`;
         calendarData[label] = result.value.events.map(ev => ({
           id: ev.id,
           title: ev.summary || '(No title)',
-          start: ev.start?.dateTime 
-            ? new Date(ev.start.dateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+          start: ev.start?.dateTime
+            ? new Date(ev.start.dateTime).toLocaleTimeString('en-US', {
+                hour: 'numeric', minute: '2-digit', hour12: true,
+                timeZone: 'America/New_York'
+              })
             : 'All day',
           end: ev.end?.dateTime
-            ? new Date(ev.end.dateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+            ? new Date(ev.end.dateTime).toLocaleTimeString('en-US', {
+                hour: 'numeric', minute: '2-digit', hour12: true,
+                timeZone: 'America/New_York'
+              })
             : '',
           location: ev.location || '',
-          description: ev.description || '',
           allDay: !ev.start?.dateTime,
           startRaw: ev.start?.dateTime || ev.start?.date || ''
         }));
       } else {
+        console.error(`Calendar ${label} failed:`, result.reason?.message);
         calendarData[label] = [];
       }
     });
-    
+
     return res.status(200).json({
       success: true,
-      date: now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }),
+      date: now.toLocaleDateString('en-US', {
+        weekday: 'long', month: 'long', day: 'numeric',
+        timeZone: 'America/New_York'
+      }),
       calendars: calendarData
     });
-    
+
   } catch (error) {
     console.error('Calendar fetch error:', error);
-    
-    // If token is invalid, tell client to re-auth
     if (error.code === 401 || error.message?.includes('invalid_grant')) {
       res.setHeader('Set-Cookie', 'gcal_tokens=; Path=/; Max-Age=0');
       return res.status(401).json({ error: 'Token expired', needsAuth: true });
     }
-    
     return res.status(500).json({ error: error.message });
   }
 };
