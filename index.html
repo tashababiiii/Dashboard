@@ -1543,29 +1543,42 @@ function loadFocus(){const el=document.getElementById('focus-txt');if(el&&S.focu
 
 // ── CALENDARS ──
 async function loadCalendars(){
-  const now=new Date();
-  const y=now.getFullYear(),mo=String(now.getMonth()+1).padStart(2,'0'),d=String(now.getDate()).padStart(2,'0');
-  const start=`${y}-${mo}-${d}T00:00:00`, end=`${y}-${mo}-${d}T23:59:59`;
   setCalStatus('loading','Loading calendars…');
   try{
-    const [mine,aarons]=await Promise.all([fetchCal(MY_CAL,start,end),fetchCal(AARON_CAL,start,end)]);
-    renderMyCal(mine);renderAaronCal(aarons);
-    setCalStatus('ok',`Synced · ${fmt12(now)}`);
+    const res = await fetch('/api/calendar');
+    
+    // Not authenticated — show connect button
+    if(res.status === 401){
+      const data = await res.json();
+      if(data.needsAuth){
+        setCalStatus('err','Not connected');
+        const connectHTML = `
+          <div style="display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:8px 0;">
+            <div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--t3);">Calendar not connected</div>
+            <a href="/api/auth/login" style="background:var(--gold);color:#fff;border:none;border-radius:3px;padding:7px 14px;font-family:'DM Mono',monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;text-decoration:none;display:inline-block;">Connect Google Calendar →</a>
+          </div>`;
+        document.getElementById('my-cal').innerHTML = connectHTML;
+        document.getElementById('aaron-cal').innerHTML = `<div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--t3);">Connect calendar above</div>`;
+        return;
+      }
+    }
+    
+    if(!res.ok) throw new Error('Calendar API error');
+    
+    const data = await res.json();
+    if(!data.success) throw new Error(data.error || 'Unknown error');
+    
+    renderMyCal(data.calendars.mine || []);
+    renderAaronCal(data.calendars.aaron || []);
+    setCalStatus('ok',`Synced · ${fmt12(new Date())}`);
+    
   }catch(e){
     setCalStatus('err','Calendar load failed');
-    document.getElementById('my-cal').innerHTML=`<div style="font-family:'DM Mono',monospace;font-size:15px;color:var(--rose);">Load failed</div>`;
-    document.getElementById('aaron-cal').innerHTML=`<div style="font-family:'DM Mono',monospace;font-size:15px;color:var(--rose);">Load failed</div>`;
+    document.getElementById('my-cal').innerHTML=`<div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--rose);">Load failed — <a href="/api/auth/login" style="color:var(--gold);">reconnect</a></div>`;
+    document.getElementById('aaron-cal').innerHTML=`<div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--rose);">Load failed</div>`;
     document.getElementById('my-cal-dot').className='cal-lbl-dot';
     document.getElementById('aaron-cal-dot').className='cal-lbl-dot';
   }
-}
-async function fetchCal(calId,s,e){
-  const raw=await claude(
-    `You have access to Google Calendar via MCP. Fetch events for calendar "${calId}" from ${s} to ${e}. Return ONLY a JSON array, no markdown. Each: {"title":string,"start":string(HH:MM AM/PM),"end":string(HH:MM AM/PM),"location":string,"attendees":string[],"isAllDay":boolean}. Sort by start. Return [] if none.`,
-    `List all events for ${calId} today between ${s} and ${e}.`,4000,
-    [{type:'url',url:'https://calendarmcp.googleapis.com/mcp/v1',name:'google-calendar'}]
-  );
-  try{return JSON.parse(raw.replace(/```json|```/g,'').trim());}catch(e){return [];}
 }
 function renderMyCal(evts){
   const el=document.getElementById('my-cal');

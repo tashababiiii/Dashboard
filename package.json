@@ -1,0 +1,8 @@
+{
+  "name": "natasha-dashboard",
+  "version": "1.0.0",
+  "description": "Natasha's Command Center Dashboard",
+  "dependencies": {
+    "googleapis": "^140.0.0"
+  }
+}
