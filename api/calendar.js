@@ -27,11 +27,10 @@ function parseCookies(req) {
 }
 
 module.exports = async (req, res) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET');
 
   const cookies = parseCookies(req);
   const tokenCookie = cookies['gcal_tokens'];
@@ -44,27 +43,16 @@ module.exports = async (req, res) => {
     const tokens = JSON.parse(Buffer.from(tokenCookie, 'base64').toString('utf8'));
     oauth2Client.setCredentials(tokens);
 
-    oauth2Client.on('tokens', (newTokens) => {
-      if (newTokens.refresh_token) tokens.refresh_token = newTokens.refresh_token;
-      tokens.access_token = newTokens.access_token;
-    });
-
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
     const now = new Date();
+    console.log('Server time (UTC):', now.toISOString());
 
-    // Wide window: yesterday 7pm UTC to tomorrow 7am UTC
-    // This covers all of today in New York time regardless of DST
-    const startUTC = new Date(now);
-    startUTC.setUTCHours(0, 0, 0, 0);
-    startUTC.setUTCHours(startUTC.getUTCHours() - 5);
+    // Use a very wide window to catch all NY timezone events
+    const timeMin = new Date(now.getTime() - 6 * 60 * 60 * 1000).toISOString();
+    const timeMax = new Date(now.getTime() + 18 * 60 * 60 * 1000).toISOString();
 
-    const endUTC = new Date(now);
-    endUTC.setUTCHours(23, 59, 59, 999);
-    endUTC.setUTCHours(endUTC.getUTCHours() + 5);
-
-    const timeMin = startUTC.toISOString();
-    const timeMax = endUTC.toISOString();
+    console.log('timeMin:', timeMin, 'timeMax:', timeMax);
 
     const calendarIds = [
       { id: MY_CAL, label: 'mine' },
@@ -81,10 +69,11 @@ module.exports = async (req, res) => {
           timeMax,
           singleEvents: true,
           orderBy: 'startTime',
-          maxResults: 20,
-          timeZone: 'America/New_York'
+          maxResults: 20
         });
-        return { label, events: response.data.items || [] };
+        const items = response.data.items || [];
+        console.log(`${label}: ${items.length} events`);
+        return { label, events: items };
       })
     );
 
@@ -112,7 +101,7 @@ module.exports = async (req, res) => {
           startRaw: ev.start?.dateTime || ev.start?.date || ''
         }));
       } else {
-        console.error(`Calendar ${label} failed:`, result.reason?.message);
+        console.error(`${label} failed:`, result.reason?.message || result.reason);
         calendarData[label] = [];
       }
     });
@@ -127,7 +116,7 @@ module.exports = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Calendar fetch error:', error);
+    console.error('Top level error:', error.message);
     if (error.code === 401 || error.message?.includes('invalid_grant')) {
       res.setHeader('Set-Cookie', 'gcal_tokens=; Path=/; Max-Age=0');
       return res.status(401).json({ error: 'Token expired', needsAuth: true });
