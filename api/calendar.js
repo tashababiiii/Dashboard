@@ -56,13 +56,14 @@ module.exports = async (req, res) => {
     
     // Time range: today
     const now = new Date();
-    const startOfDay = new Date(now);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(now);
-    endOfDay.setHours(23, 59, 59, 999);
     
-    const timeMin = startOfDay.toISOString();
-    const timeMax = endOfDay.toISOString();
+const nyDate = new Intl.DateTimeFormat('en-CA', { 
+  timeZone: 'America/New_York',
+  year: 'numeric', month: '2-digit', day: '2-digit'
+}).format(now);
+
+const timeMin = `${nyDate}T00:00:00-04:00`;
+const timeMax = `${nyDate}T23:59:59-04:00`;
     
     // Fetch from all calendars in parallel
     const calendarIds = [
