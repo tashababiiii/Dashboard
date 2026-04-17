@@ -28,9 +28,12 @@ function parseCookies(req) {
 }
 
 module.exports = async (req, res) => {
-  // Set CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET');
+ // Prevent CDN caching — force fresh data every time
+res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+res.setHeader('Pragma', 'no-cache');
+res.setHeader('Expires', '0');
+res.setHeader('Access-Control-Allow-Origin', '*');
+res.setHeader('Access-Control-Allow-Methods', 'GET');
   
   // Parse token from cookie
   const cookies = parseCookies(req);
