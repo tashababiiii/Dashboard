@@ -1,3 +1,4 @@
+// v2
 const Anthropic = require('@anthropic-ai/sdk');
 
 module.exports = async (req, res) => {
