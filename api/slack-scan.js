@@ -30,7 +30,7 @@ module.exports = async (req, res) => {
     if (messages.length === 0) return res.status(200).json({ tasks: [] });
 
     const message = await client.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 800,
       messages: [{ role: 'user', content: `Identify tasks for Natasha from these Slack messages. Return ONLY a JSON array: [{"task":string,"from":string,"channel":string,"priority":"high"|"med"|"low"}]. If nothing actionable return [].\n\n${messages.map(m => `From: ${m.from} | ${m.channel}\n${m.text}`).join('\n---\n')}` }]
     });
