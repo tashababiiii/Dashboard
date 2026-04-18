@@ -1136,7 +1136,8 @@ async function claude(system, user, maxTokens=1000, mcp=null){
     });
     if (!r.ok) throw new Error(`API error: ${r.status}`);
     const d = await r.json();
-    return d.text || '';
+    console.log('API response:', JSON.stringify(d).substring(0, 200));
+    return d.text || d.error || '';
   } catch(e) {
     console.error('Claude API error:', e);
     return '';
@@ -1231,10 +1232,24 @@ let S={
     {id:'p9',name:'Pete Keenan',role:'Partner · 645',color:'#5fa8a0',initials:'PK',tag:'645',lastContact:'This week',nextAction:'First Citizens call today'},
   ],
   waitingOn:{
-    '645':[{id:'w1',person:'Alex Espiga / First Citizens',what:'Confirmation on ECL call outcome',since:'Today'}],
-    'aaron':[{id:'w2',person:'Aaron',what:'Response on LP meeting priorities',since:'2 days ago'},{id:'w3',person:'Aaron',what:'Approval on office Phase 1 budget',since:'Pending'}],
-    'faye':[{id:'w4',person:'Doherty',what:'Revised scope feedback',since:'3 days ago'}],
-    'personal':[],
+    '645':[
+      {id:'w1',person:'Kelly / Accounting',what:'Status update on AICON 2026 invoice payment',since:'Today'},
+      {id:'w2',person:'Porter Ellis (BlackRock)',what:'Preqin Head of VC Research meeting — late April/early May scheduling',since:'Today'},
+      {id:'w3',person:'Jad Bekdach (Apollo)',what:'Confirmation on April 22 12pm call re: Event Expense Structure',since:'Today'},
+      {id:'w4',person:'Tracee Brown (Pivotal)',what:'Calendar placeholder for DC Visit May 22',since:'Today'},
+      {id:'w5',person:'IVY Trek',what:'Start time response for April 24 VC visit',since:'Yesterday'},
+    ],
+    'aaron':[
+      {id:'w6',person:'Aaron',what:'Verbal confirmation on Genially Board Meeting — Málaga July 9–10',since:'Today'},
+      {id:'w7',person:'Aaron',what:'Confirm May 1 works for Karen AI x 645 meeting',since:'Today'},
+    ],
+    'faye':[
+      {id:'w8',person:'White Family',what:'Decision on Aiden lacrosse gift options — due home Apr 19',since:'Today'},
+      {id:'w9',person:'National Black Theatre',what:'Confirm tour time with White family',since:'Today'},
+    ],
+    'personal':[
+      {id:'w10',person:'Mandy',what:'Availability to come by 645 for catch-up',since:'This week'},
+    ],
   },
   rhythms:[
     {id:'r1',title:'Aaron Support',cadence:'Daily',items:[
@@ -1774,8 +1789,9 @@ Waiting on:\n${wCtx||'None.'}
 Be sharp, direct, warm. Chief of staff energy. Surface the highest-leverage things first. 3–4 sentences max unless she asks for more. You know she's building toward Chief of Staff — always frame suggestions with that ambition in mind.`;
   try{
     const reply=await claude(sys,q);
+    if(!reply){txt.textContent='No response — check console for details.';btn.disabled=false;inp.value='';return;}
     txt.textContent='';let i=0;
-    const tw=setInterval(()=>{txt.textContent+=reply[i];i++;if(i>=reply.length)clearInterval(tw);},11);
+    const tw=setInterval(()=>{if(i<reply.length){txt.textContent+=reply[i];i++;}else{clearInterval(tw);}},11);
   }catch(e){txt.textContent='Could not reach Claude.';}
   btn.disabled=false;inp.value='';
 }
