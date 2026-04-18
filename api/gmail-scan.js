@@ -40,7 +40,7 @@ module.exports = async (req, res) => {
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
     const listRes = await gmail.users.threads.list({
       userId: 'me',
-      q: 'newer_than:1d -label:Unroll.me -from:unroll.me -from:noreply',
+      q: 'newer_than:3d -label:Unroll.me -from:unroll.me -from:noreply',
       maxResults: 20
     });
 
