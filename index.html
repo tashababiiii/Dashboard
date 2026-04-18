@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -655,6 +654,18 @@ header{padding:18px 24px 14px;border-bottom:1px solid var(--bm);display:flex;ali
     <div class="goals-grid" id="goals-grid">
       <!-- Populated by JS -->
     </div>
+
+    <!-- TASK COMPLETION METRICS -->
+    <div style="padding:0 32px 32px;">
+      <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);margin-bottom:12px;margin-top:8px;">Task Completion Metrics — EOY Review</div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;" id="metrics-grid">
+        <!-- Populated by renderMetrics() -->
+      </div>
+      <div style="margin-top:12px;background:var(--s2);border:1px solid var(--bm);border-radius:4px;padding:12px 16px;">
+        <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--t3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em;">Completed this session</div>
+        <div id="metrics-log" style="font-size:13px;color:var(--t2);"></div>
+      </div>
+    </div>
   </div>
 
   <!-- ── OFFICE OPS PANEL ── -->
@@ -1047,6 +1058,34 @@ header{padding:18px 24px 14px;border-bottom:1px solid var(--bm);display:flex;ali
   </div>
 </div>
 
+<!-- IOP GRADE MODAL -->
+<div class="modal-overlay" id="modal-iop-grade">
+  <div class="modal" style="border-color:rgba(107,62,160,.3);max-width:480px;">
+    <div class="modal-hd">
+      <div><div class="modal-title" style="color:var(--violet);" id="grade-modal-title">◆ Grade This Initiative</div><div class="modal-sub">Report card style — be honest. This feeds your monthly IOP Check-In.</div></div>
+      <button class="modal-x" onclick="closeModal('iop-grade')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:16px;">
+        <button onclick="selectGrade('A')" id="grade-btn-A" style="padding:16px 8px;border:2px solid var(--bm);border-radius:4px;background:none;cursor:pointer;font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:var(--t3);transition:all .15s;">A</button>
+        <button onclick="selectGrade('B')" id="grade-btn-B" style="padding:16px 8px;border:2px solid var(--bm);border-radius:4px;background:none;cursor:pointer;font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:var(--t3);transition:all .15s;">B</button>
+        <button onclick="selectGrade('C')" id="grade-btn-C" style="padding:16px 8px;border:2px solid var(--bm);border-radius:4px;background:none;cursor:pointer;font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:var(--t3);transition:all .15s;">C</button>
+        <button onclick="selectGrade('D')" id="grade-btn-D" style="padding:16px 8px;border:2px solid var(--bm);border-radius:4px;background:none;cursor:pointer;font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:var(--t3);transition:all .15s;">D</button>
+      </div>
+      <div id="grade-rubric" style="background:var(--s2);border:1px solid var(--bm);border-radius:3px;padding:12px 14px;font-size:13px;color:var(--t2);margin-bottom:14px;min-height:60px;line-height:1.6;"></div>
+      <div>
+        <div class="m-sec">Your reasoning — what's behind this grade?</div>
+        <textarea class="m-ta" id="grade-notes" placeholder="What have you done well? What's stalled? What needs to change to move up a grade?" style="min-height:80px;"></textarea>
+      </div>
+      <div>
+        <div class="m-sec">What will you do differently next month to improve?</div>
+        <textarea class="m-ta" id="grade-improve" placeholder="Be specific — one or two concrete actions you commit to..." style="min-height:60px;"></textarea>
+      </div>
+      <button class="m-submit" style="background:var(--violet);" onclick="saveGrade()">Save grade →</button>
+    </div>
+  </div>
+</div>
+
 <!-- IOP ACCOUNTABILITY MODAL -->
 <div class="modal-overlay" id="modal-iop">
   <div class="modal" style="border-color:rgba(123,79,158,.3);">
@@ -1097,7 +1136,7 @@ async function claude(system,user,maxTokens=1000,mcp=null){
 }
 
 // ── STATE ──
-const KEY='cmd_v7';
+const KEY='cmd_v8';
 const CLIENTS=[
   {id:'doherty',label:'Doherty',color:'#b5835a'},
   {id:'garcia',label:'Garcia-Huang',color:'#7a9e8a'},
@@ -1112,6 +1151,8 @@ let S={
   focus:'',doneToday:0,capacity:70,
   hz:'today',fhz:'today',ahz:'today',ws:'all',
   fayeOpen:{doherty:true,garcia:true,morrell:true,holiday:true,white:true},
+  completedMetrics:{total:0,by645:0,byFaye:0,byPersonal:0,byAaron:0,byOffice:0,log:[]},
+  iopGrades:{gp:null,events:null,office:null,loop:null},
   goals:[
     {id:'gp',title:'GP Enablement',color:'var(--amber)',desc:'Reduce Aaron\'s operational load. Proactive calendar management, prep materials ready ahead of time.',milestones:[
       {id:'m1',text:'Audit Aaron\'s calendar patterns',done:true},
@@ -1257,7 +1298,7 @@ function switchTab(tab,btn){
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById(`panel-${tab}`).classList.add('active');
-  if(tab==='goals')renderGoals();
+  if(tab==='goals'){renderGoals();renderMetrics();}
   if(tab==='office')renderOffice();
   if(tab==='people')renderPeople();
   if(tab==='waiting')renderWaiting();
@@ -1303,9 +1344,9 @@ function addOT(title,category,priority='med'){
   save();updateBadges();
 }
 
-function toggleT(id){const t=S.tasks.find(t=>t.id===id);if(!t)return;t.done=!t.done;if(t.done)S.doneToday++;else S.doneToday=Math.max(0,S.doneToday-1);save();render();metrics();}
-function toggleFT(id){const t=S.fayeTasks.find(t=>t.id===id);if(!t)return;t.done=!t.done;if(t.done)S.doneToday++;else S.doneToday=Math.max(0,S.doneToday-1);save();renderFaye();metrics();}
-function toggleAT(id){const t=S.aaronTasks.find(t=>t.id===id);if(!t)return;t.done=!t.done;save();renderAaron();metrics();}
+function toggleT(id){const t=S.tasks.find(t=>t.id===id);if(!t)return;t.done=!t.done;if(t.done){trackCompletion(t.tag);setTimeout(()=>{render();updateBadges();},400);}else{render();updateBadges();}save();metrics();}
+function toggleFT(id){const t=S.fayeTasks.find(t=>t.id===id);if(!t)return;t.done=!t.done;if(t.done){trackCompletion('faye');setTimeout(()=>{renderFaye();updateBadges();},400);}else{renderFaye();updateBadges();}save();metrics();}
+function toggleAT(id){const t=S.aaronTasks.find(t=>t.id===id);if(!t)return;t.done=!t.done;if(t.done){trackCompletion('aaron');setTimeout(()=>{renderAaron();updateBadges();},400);}else{renderAaron();updateBadges();}save();metrics();}
 
 function quickAdd(e){if(e.key!=='Enter')return;const i=document.getElementById('new-task'),v=i.value.trim();if(!v)return;addTask(v,document.getElementById('new-tag').value,document.getElementById('new-hz').value);i.value='';i.focus();}
 function quickAddAaron(e){if(e.key!=='Enter')return;const i=document.getElementById('aaron-quick-inp'),v=i.value.trim();if(!v)return;addAT(v,document.getElementById('aaron-hz-sel').value);i.value='';i.focus();}
@@ -1314,19 +1355,46 @@ function quickAddFaye(e,clientId){if(e.key!=='Enter')return;const v=e.target.val
 // ── RENDER TASKS ──
 function render(){
   const list=document.getElementById('task-list');
-  let tasks=S.tasks.filter(t=>t.hz===S.hz&&(S.ws==='all'||t.tag===S.ws)).sort((a,b)=>{if(a.done!==b.done)return a.done?1:-1;return(pOrd[a.priority]??1)-(pOrd[b.priority]??1);});
+  let tasks=S.tasks.filter(t=>!t.done&&t.hz===S.hz&&(S.ws==='all'||t.tag===S.ws)).sort((a,b)=>(pOrd[a.priority]??1)-(pOrd[b.priority]??1));
   list.innerHTML=tasks.length?tasks.map((t,i)=>`
-    <div class="task-item ${t.done?'done':''}" style="animation-delay:${i*.04}s">
+    <div class="task-item" style="animation-delay:${i*.04}s" id="ti-${t.id}">
       <div class="t-bar ${t.priority}"></div>
-      <div class="t-body">
+      <div class="t-body" onclick="editTask(${t.id})" style="cursor:pointer;flex:1;">
         <div class="t-tags"><span class="tag t-${t.tag}">${tagLabel[t.tag]||t.tag}</span>${t.note?`<span class="t-note">${t.note}</span>`:''}</div>
-        <div class="task-title">${t.title}</div>
+        <div class="task-title" id="tt-${t.id}">${t.title}</div>
       </div>
-      <div class="t-check ${t.done?'on':''}" onclick="toggleT(${t.id})"></div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <div class="t-check" onclick="toggleT(${t.id})"></div>
+        <button onclick="deleteTask(${t.id})" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px;border-radius:2px;transition:color .15s;" onmouseover="this.style.color='var(--rose)'" onmouseout="this.style.color='var(--t3)'">✕</button>
+      </div>
     </div>`).join(''):'<div class="empty-msg">Nothing here yet.</div>';
   ['today','week','month','someday'].forEach(hz=>{const el=document.getElementById(`c-${hz}`);if(el)el.textContent=S.tasks.filter(t=>t.hz===hz&&!t.done&&(S.ws==='all'||t.tag===S.ws)).length;});
   document.getElementById('my-meta').textContent=`${S.tasks.filter(t=>!t.done).length} open`;
   metrics();
+}
+
+function editTask(id){
+  const t=S.tasks.find(t=>t.id===id);if(!t)return;
+  const el=document.getElementById(`tt-${id}`);if(!el)return;
+  const old=t.title;
+  el.contentEditable='true';
+  el.style.outline='1px solid var(--gold)';
+  el.style.borderRadius='2px';
+  el.focus();
+  const finish=()=>{
+    el.contentEditable='false';
+    el.style.outline='none';
+    const newTitle=el.textContent.trim();
+    if(newTitle&&newTitle!==old){t.title=newTitle;save();}
+    else{el.textContent=old;}
+  };
+  el.onblur=finish;
+  el.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();finish();}if(e.key==='Escape'){el.textContent=old;finish();}};
+}
+
+function deleteTask(id){
+  S.tasks=S.tasks.filter(t=>t.id!==id);
+  save();render();updateBadges();
 }
 
 function renderFaye(){
@@ -1347,11 +1415,14 @@ function renderFaye(){
         <div class="client-chev ${isOpen?'open':''}">▶</div>
       </div>
       <div class="faye-tasks ${isOpen?'open':''}">
-        ${tasks.length?tasks.map((t,i)=>`
-          <div class="task-item ${t.done?'done':''}" style="animation-delay:${i*.04}s">
-            <div class="t-bar ${t.priority}" style="background:${t.done?'var(--t3)':client.color}"></div>
-            <div class="t-body">${t.note?`<div class="t-tags"><span class="t-note">${t.note}</span></div>`:''}<div class="task-title">${t.title}</div></div>
-            <div class="t-check ${t.done?'on':''}" onclick="toggleFT(${t.id})"></div>
+        ${tasks.length?tasks.filter(t=>!t.done).map((t,i)=>`
+          <div class="task-item" style="animation-delay:${i*.04}s" id="fti-${t.id}">
+            <div class="t-bar ${t.priority}" style="background:${client.color}"></div>
+            <div class="t-body" onclick="editFayeTask(${t.id})" style="cursor:pointer;flex:1;">${t.note?`<div class="t-tags"><span class="t-note">${t.note}</span></div>`:''}<div class="task-title" id="ftt-${t.id}">${t.title}</div></div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <div class="t-check" onclick="toggleFT(${t.id})"></div>
+              <button onclick="deleteFayeTask(${t.id})" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px;border-radius:2px;transition:color .15s;" onmouseover="this.style.color='var(--rose)'" onmouseout="this.style.color='var(--t3)'">✕</button>
+            </div>
           </div>`).join(''):'<div class="empty-msg" style="font-size:15px;padding:12px 18px;">Nothing for this period.</div>'}
         <div class="faye-add"><input class="faye-add-inp" placeholder="+ Add task for ${client.label}…" onkeydown="quickAddFaye(event,'${client.id}')" /></div>
       </div>
@@ -1364,23 +1435,59 @@ function toggleFayeGroup(id){S.fayeOpen[id]=!S.fayeOpen[id];save();renderFaye();
 
 function renderAaron(){
   const list=document.getElementById('aaron-list');
-  let tasks=S.aaronTasks.filter(t=>t.hz===S.ahz).sort((a,b)=>{if(a.done!==b.done)return a.done?1:-1;return(pOrd[a.priority]??1)-(pOrd[b.priority]??1);});
+  let tasks=S.aaronTasks.filter(t=>!t.done&&t.hz===S.ahz).sort((a,b)=>(pOrd[a.priority]??1)-(pOrd[b.priority]??1));
   list.innerHTML=tasks.length?tasks.map((t,i)=>`
-    <div class="task-item ${t.done?'done':''}" style="animation-delay:${i*.04}s">
-      <div class="t-bar" style="background:${t.done?'var(--t3)':'var(--amber)'};"></div>
-      <div class="t-body">${t.note?`<div class="t-tags"><span class="t-note">${t.note}</span></div>`:''}<div class="task-title">${t.title}</div></div>
-      <div class="t-check ${t.done?'on':''}" onclick="toggleAT(${t.id})"></div>
+    <div class="task-item" style="animation-delay:${i*.04}s" id="ati-${t.id}">
+      <div class="t-bar" style="background:var(--amber);"></div>
+      <div class="t-body" onclick="editAaronTask(${t.id})" style="cursor:pointer;flex:1;">${t.note?`<div class="t-tags"><span class="t-note">${t.note}</span></div>`:''}<div class="task-title" id="att-${t.id}">${t.title}</div></div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <div class="t-check" onclick="toggleAT(${t.id})"></div>
+        <button onclick="deleteAaronTask(${t.id})" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px;border-radius:2px;transition:color .15s;" onmouseover="this.style.color='var(--rose)'" onmouseout="this.style.color='var(--t3)'">✕</button>
+      </div>
     </div>`).join(''):'<div class="empty-msg">No tasks for this window.</div>';
   ['today','week','month'].forEach(hz=>{const el=document.getElementById(`ac-${hz}`);if(el)el.textContent=S.aaronTasks.filter(t=>t.hz===hz&&!t.done).length;});
   metrics();
 }
 
+function editFayeTask(id){
+  const t=S.fayeTasks.find(t=>t.id===id);if(!t)return;
+  const el=document.getElementById(`ftt-${id}`);if(!el)return;
+  const old=t.title;
+  el.contentEditable='true';el.style.outline='1px solid var(--gold)';el.style.borderRadius='2px';el.focus();
+  const finish=()=>{el.contentEditable='false';el.style.outline='none';const v=el.textContent.trim();if(v&&v!==old){t.title=v;save();}else{el.textContent=old;}};
+  el.onblur=finish;el.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();finish();}if(e.key==='Escape'){el.textContent=old;finish();}};
+}
+function deleteFayeTask(id){S.fayeTasks=S.fayeTasks.filter(t=>t.id!==id);save();renderFaye();updateBadges();}
+
+function editAaronTask(id){
+  const t=S.aaronTasks.find(t=>t.id===id);if(!t)return;
+  const el=document.getElementById(`att-${id}`);if(!el)return;
+  const old=t.title;
+  el.contentEditable='true';el.style.outline='1px solid var(--gold)';el.style.borderRadius='2px';el.focus();
+  const finish=()=>{el.contentEditable='false';el.style.outline='none';const v=el.textContent.trim();if(v&&v!==old){t.title=v;save();}else{el.textContent=old;}};
+  el.onblur=finish;el.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();finish();}if(e.key==='Escape'){el.textContent=old;finish();}};
+}
+function deleteAaronTask(id){S.aaronTasks=S.aaronTasks.filter(t=>t.id!==id);save();renderAaron();updateBadges();}
+
 function metrics(){
   const allOpen=S.tasks.filter(t=>!t.done).length+S.fayeTasks.filter(t=>!t.done).length+S.officeTasks.filter(t=>!t.done).length;
   const allWaiting=Object.values(S.waitingOn).reduce((a,b)=>a+b.length,0);
   document.getElementById('m-open').textContent=allOpen;
-  document.getElementById('m-done').textContent=S.doneToday;
+  document.getElementById('m-done').textContent=S.completedMetrics?.total||0;
   document.getElementById('m-waiting').textContent=allWaiting;
+}
+
+// ── COMPLETED TASK TRACKING ──
+function trackCompletion(tag){
+  if(!S.completedMetrics) S.completedMetrics={total:0,by645:0,byFaye:0,byPersonal:0,byAaron:0,byOffice:0,log:[]};
+  S.completedMetrics.total=(S.completedMetrics.total||0)+1;
+  if(tag==='645')S.completedMetrics.by645=(S.completedMetrics.by645||0)+1;
+  else if(tag==='faye')S.completedMetrics.byFaye=(S.completedMetrics.byFaye||0)+1;
+  else if(tag==='personal')S.completedMetrics.byPersonal=(S.completedMetrics.byPersonal||0)+1;
+  else if(tag==='aaron')S.completedMetrics.byAaron=(S.completedMetrics.byAaron||0)+1;
+  else if(tag==='office')S.completedMetrics.byOffice=(S.completedMetrics.byOffice||0)+1;
+  S.completedMetrics.log.push({tag,date:new Date().toISOString()});
+  save();
 }
 
 function updateBadges(){
@@ -1398,12 +1505,25 @@ function updateBadges(){
 // ── GOALS PANEL ──
 function renderGoals(){
   const grid=document.getElementById('goals-grid');
-  grid.innerHTML=S.goals.map(g=>`
+  const gradeMap={A:{color:'#157a40',bg:'rgba(21,122,64,0.12)',label:'A',desc:'Excellent'},B:{color:'#1a4fc4',bg:'rgba(26,79,196,0.12)',label:'B',desc:'Good'},C:{color:'#c84800',bg:'rgba(200,72,0,0.12)',label:'C',desc:'Needs Work'},D:{color:'#b83248',bg:'rgba(184,50,72,0.12)',label:'D',desc:'Behind'}};
+  const iopKeyMap={gp:'gp',events:'events',office:'office',loop:'loop'};
+  grid.innerHTML=S.goals.map(g=>{
+    const gKey=iopKeyMap[g.id]||g.id;
+    const grade=S.iopGrades?.[gKey]||null;
+    const gradeInfo=grade?gradeMap[grade]:null;
+    return `
     <div class="goal-card">
       <div class="goal-card-header">
         <div class="goal-card-title" style="color:${g.color}">${g.title}</div>
-        <div class="goal-card-phase">Days 60–180</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="goal-card-phase">Days 60–180</div>
+          <!-- GRADE BADGE -->
+          <div style="position:relative;">
+            <div style="font-family:'DM Mono',monospace;font-size:11px;font-weight:700;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid ${gradeInfo?gradeInfo.color:'var(--bm)'};color:${gradeInfo?gradeInfo.color:'var(--t3)'};background:${gradeInfo?gradeInfo.bg:'transparent'};" onclick="openGradeModal('${g.id}','${g.title}')" title="Set IOP grade">${gradeInfo?gradeInfo.label:'?'}</div>
+          </div>
+        </div>
       </div>
+      ${gradeInfo&&S.iopGradeNotes?.[gKey]?`<div style="font-size:12px;color:${gradeInfo.color};background:${gradeInfo.bg};border-radius:3px;padding:6px 10px;margin-bottom:8px;font-style:italic;">${S.iopGradeNotes[gKey]}</div>`:''}
       <div class="goal-desc">${g.desc}</div>
       <div class="goal-progress">
         <div class="goal-prog-lbl"><span class="goal-prog-name">Overall progress</span><span class="goal-prog-pct">${g.progress}%</span></div>
@@ -1416,7 +1536,7 @@ function renderGoals(){
             <div class="milestone-txt ${m.done?'done-txt':''}">${m.text}</div>
           </div>`).join('')}
       </div>
-    </div>`).join('');
+    </div>`}).join('');
 }
 
 function toggleMilestone(goalId,milestoneId){
@@ -1546,7 +1666,7 @@ function loadFocus(){const el=document.getElementById('focus-txt');if(el&&S.focu
 async function loadCalendars(){
   setCalStatus('loading','Loading calendars…');
   try{
-    const res = await fetch('/api/calendar');
+    const res = await fetch('/api/calendar?t=' + Date.now(), { cache: 'no-store' });
     
     // Not authenticated — show connect button
     if(res.status === 401){
@@ -1714,7 +1834,7 @@ function openModal(type){
   if(type==='morning')loadAsanaTasksForMorning();
 }
 function closeModal(type){document.getElementById(`modal-${type}`).classList.remove('open');}
-['morning','weekly','evening','iop'].forEach(t=>{
+['morning','weekly','evening','iop','iop-grade'].forEach(t=>{
   const el=document.getElementById(`modal-${t}`);
   if(el)el.addEventListener('click',e=>{if(e.target===el)closeModal(t);});
 });
@@ -1902,28 +2022,28 @@ Be honest, direct, and constructive — not a cheerleader. Acknowledge genuine p
 // ── SEED ──
 function seed(){
   if(S.tasks.length>0||S.fayeTasks.length>0||S.aaronTasks.length>0)return;
-  addTask('Review Persimmon AI diligence materials','645','today','high','before Aaron\'s call');
-  addTask('LP update draft — Q1 portfolio review','645','week','high');
-  addTask('Follow up on Alt Investments conference contacts','645','week','med');
-  addTask('Coordinate team lunch — Edge team Subway/McDonald\'s celebration at 645 office','645','week','med','From Slack · Meredith & Willy · mid-May');
-  addTask('Schedule dentist appointment','personal','month','low');
-  addFT('Review revised scope document','doherty','today','high');
+  // Casino Night V11 tasks (from Asana)
+  addTask('Confirm Food & Beverage','645','week','high','Casino Night V11 · due Apr 22');
+  addTask('Provide Final Guest List to Venue','645','week','high','Casino Night V11 · due Apr 24');
+  addTask('Printed Nametags','645','week','high','Casino Night V11 · due Apr 27');
+  addTask('Rebecca to pick up playing cards','645','week','med','Casino Night V11 · due Apr 27 · delegated');
+  addTask('Log Total Cost into Events Spreadsheet','645','week','med','Casino Night V11 · due May 1');
+  addTask('Purchase remaining books','645','week','high','Casino Night V11 · due Apr 21');
+  // Faye tasks
   addFT('Send status update email','doherty','week','med');
-  addFT('Deliverable deck draft review','garcia','today','high');
+  addFT('Check SkinSpirit at Nordstrom for BBL + Moxi availability','doherty','week','med');
+  addFT('In-person errands','doherty','week','med');
+  addFT('Job responsibilities for Sammie','garcia','week','med');
   addFT('Client check-in prep','garcia','week','med');
-  addFT('Review feedback from last session','morrell','week','med');
-  addFT('Schedule next touchpoint','holiday','week','med');
+  addFT('Apartment Contractor Support','morrell','week','med');
+  addFT('Apartment Redecoration and Decluttering','morrell','week','med');
+  addFT('Add Trinity schedule to calendar','holiday','week','med');
+  addFT('Order gifts','white','today','high');
+  addFT('Dinner','white','week','med');
   addFT('Gift tracker — remaining items','white','today','high','per Google Sheet');
+  // Aaron tasks
   addAT('Brief for LP meeting — deck + talking points','today','high','Aaron needs by EOD');
-  addAT('Draft follow-up to Persimmon founders post-call','week','med','for Aaron to send');
-  addAT('Reschedule conflicting Thursday calls','week','med');
-  addTask('Log Total Cost into Events Spreadsheet','645','week','med','Casino Night V11 · due Apr 28');
-  addTask('Confirm Food & Beverage','645','week','high','Casino Night V11 · due Apr 28');
-  addTask('Printed Nametags','645','week','high','Casino Night V11 · due Apr 28');
   addAT('Tier-1 meeting prep checklist — build template','week','high','IOP Initiative 1');
-  addTask('Log Total Cost into Events Spreadsheet','645','today','med','Asana — Events project');
-  addTask('Confirm Food & Beverage','645','today','high','Asana — Events project');
-  addTask('Printed Nametags','645','today','med','Asana — Events project');
 }
 
 // ── ASANA LIVE PULL ──
@@ -2015,7 +2135,8 @@ Exclude: general conversation, reactions, FYI messages with no action required, 
     btn.disabled = false;
     btn.textContent = 'Scan Slack →';
     empty.style.display = 'block';
-    empty.textContent = 'Scan failed — try again or add tasks manually.';
+    empty.style.color = 'var(--amber)';
+    empty.textContent = '⚡ Slack Scan works in Claude.ai only. Open Claude and say "scan my Slack" for a live scan.';
   }
 }
 
@@ -2149,7 +2270,8 @@ Be conservative — only include genuine action items. When in doubt, put in FYI
     btn.disabled = false;
     btn.textContent = 'Scan Email →';
     empty.style.display = 'block';
-    empty.textContent = 'Scan failed — try again or add tasks manually.';
+    empty.style.color = 'var(--amber)';
+    empty.textContent = '⚡ Email Scan works in Claude.ai only. Open Claude and say "scan my email" for a live triage.';
   }
 }
 
@@ -2195,6 +2317,100 @@ function addCheckedEmailWaiting() {
     document.getElementById('email-waiting-list').innerHTML = `<div style="font-size:15px;color:var(--sage);padding:6px;">✓ Added ${added} item${added>1?'s':''} to Waiting On</div>`;
     document.getElementById('email-waiting-wrap').style.display = 'block';
   }
+}
+
+function renderMetrics(){
+  const m=S.completedMetrics||{total:0,by645:0,byFaye:0,byPersonal:0,byAaron:0,byOffice:0,log:[]};
+  const cats=[
+    {label:'645',key:'by645',color:'var(--blue)'},
+    {label:'Faye',key:'byFaye',color:'var(--rose)'},
+    {label:'Aaron',key:'byAaron',color:'var(--amber)'},
+    {label:'Personal',key:'byPersonal',color:'var(--sage)'},
+    {label:'Office',key:'byOffice',color:'var(--teal)'},
+  ];
+  const grid=document.getElementById('metrics-grid');
+  if(!grid)return;
+  grid.innerHTML=cats.map(c=>`
+    <div style="background:var(--s2);border:1px solid var(--bm);border-radius:4px;padding:14px;text-align:center;">
+      <div style="font-family:'Playfair Display',serif;font-size:28px;font-weight:600;color:${c.color};">${m[c.key]||0}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);letter-spacing:.08em;text-transform:uppercase;margin-top:4px;">${c.label}</div>
+    </div>`).join('');
+  const logEl=document.getElementById('metrics-log');
+  if(!logEl)return;
+  if(!m.log||m.log.length===0){logEl.textContent='No tasks completed yet this session.';return;}
+  const recent=m.log.slice(-5).reverse();
+  logEl.innerHTML=recent.map(l=>{
+    const d=new Date(l.date);
+    const time=d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
+    return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--b);"><span style="color:var(--t);">${l.tag.toUpperCase()}</span><span style="color:var(--t3);font-family:'DM Mono',monospace;font-size:11px;">${time}</span></div>`;
+  }).join('');
+}
+
+// ── IOP GRADING ──
+let _gradingGoalId = null;
+let _selectedGrade = null;
+
+const GRADE_RUBRIC = {
+  A: {color:'#157a40', bg:'rgba(21,122,64,0.12)', text:'Excellent — you are exceeding expectations. Milestones are ahead of schedule, work is proactive, and you\'re operating at Chief of Staff level in this area.'},
+  B: {color:'#1a4fc4', bg:'rgba(26,79,196,0.12)', text:'Good — solid progress. Milestones are on track, work is consistent, but there\'s room to go deeper or be more proactive.'},
+  C: {color:'#c84800', bg:'rgba(200,72,0,0.12)', text:'Needs Work — behind where you should be. Some milestones are stalled, work is reactive rather than proactive, or quality isn\'t meeting the standard.'},
+  D: {color:'#b83248', bg:'rgba(184,50,72,0.12)', text:'Behind — significant gaps. This initiative needs urgent attention. Identify what\'s blocking you and bring it to your next Aaron IOP review.'}
+};
+
+function openGradeModal(goalId, title){
+  _gradingGoalId = goalId;
+  _selectedGrade = S.iopGrades?.[goalId] || null;
+  document.getElementById('grade-modal-title').textContent = `◆ Grade: ${title}`;
+  document.getElementById('grade-notes').value = S.iopGradeNotes?.[goalId] || '';
+  document.getElementById('grade-improve').value = S.iopGradeImprove?.[goalId] || '';
+  document.getElementById('grade-rubric').textContent = _selectedGrade ? GRADE_RUBRIC[_selectedGrade].text : 'Select a grade above to see what it means.';
+  ['A','B','C','D'].forEach(g => {
+    const btn = document.getElementById(`grade-btn-${g}`);
+    const info = GRADE_RUBRIC[g];
+    if(g === _selectedGrade){
+      btn.style.borderColor = info.color;
+      btn.style.color = info.color;
+      btn.style.background = info.bg;
+    } else {
+      btn.style.borderColor = 'var(--bm)';
+      btn.style.color = 'var(--t3)';
+      btn.style.background = 'none';
+    }
+  });
+  document.getElementById('modal-iop-grade').classList.add('open');
+}
+
+function selectGrade(grade){
+  _selectedGrade = grade;
+  const info = GRADE_RUBRIC[grade];
+  document.getElementById('grade-rubric').textContent = info.text;
+  document.getElementById('grade-rubric').style.borderLeft = `3px solid ${info.color}`;
+  ['A','B','C','D'].forEach(g => {
+    const btn = document.getElementById(`grade-btn-${g}`);
+    const gi = GRADE_RUBRIC[g];
+    if(g === grade){
+      btn.style.borderColor = gi.color;
+      btn.style.color = gi.color;
+      btn.style.background = gi.bg;
+    } else {
+      btn.style.borderColor = 'var(--bm)';
+      btn.style.color = 'var(--t3)';
+      btn.style.background = 'none';
+    }
+  });
+}
+
+function saveGrade(){
+  if(!_selectedGrade||!_gradingGoalId){alert('Please select a grade first.');return;}
+  if(!S.iopGrades) S.iopGrades = {};
+  if(!S.iopGradeNotes) S.iopGradeNotes = {};
+  if(!S.iopGradeImprove) S.iopGradeImprove = {};
+  S.iopGrades[_gradingGoalId] = _selectedGrade;
+  S.iopGradeNotes[_gradingGoalId] = document.getElementById('grade-notes').value.trim();
+  S.iopGradeImprove[_gradingGoalId] = document.getElementById('grade-improve').value.trim();
+  save();
+  closeModal('iop-grade');
+  renderGoals();
 }
 
 // ── INIT ──
