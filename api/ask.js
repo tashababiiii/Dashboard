@@ -12,8 +12,19 @@ module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { system, user, max_tokens = 1000 } = req.body;
-    if (!system || !user) return res.status(400).json({ error: 'Missing system or user prompt' });
+    // Parse body manually if needed
+    let body = req.body;
+    if (typeof body === 'string') {
+      try { body = JSON.parse(body); } catch(e) {}
+    }
+    if (!body) {
+      return res.status(400).json({ error: 'Empty request body' });
+    }
+
+    const { system, user, max_tokens = 1000 } = body;
+    if (!system || !user) {
+      return res.status(400).json({ error: 'Missing system or user prompt', received: Object.keys(body) });
+    }
 
     const message = await client.messages.create({
       model: 'claude-sonnet-4-20250514',
@@ -25,7 +36,7 @@ module.exports = async (req, res) => {
     const text = message.content?.find(b => b.type === 'text')?.text || '';
     return res.status(200).json({ text });
   } catch (error) {
-    console.error('Ask API error:', error);
+    console.error('Ask API error:', error.message);
     return res.status(500).json({ error: error.message });
   }
 };
