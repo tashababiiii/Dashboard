@@ -9,7 +9,7 @@ module.exports = async (req, res) => {
     if (!system || !user) return res.status(400).json({ error: 'Missing params' });
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const msg = await client.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens,
       system,
       messages: [{ role: 'user', content: user }]
