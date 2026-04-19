@@ -65,14 +65,14 @@ module.exports = async (req, res) => {
         const listRes = await Promise.race([
           gmail.users.threads.list({
             userId: 'me',
-            q: 'newer_than:2d -from:unroll.me -from:noreply is:unread',
+            q: 'is:unread newer_than:7d -from:noreply',
             maxResults: 8
           }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
         ]);
         const threads = listRes.data.threads || [];
         const summaries = await Promise.allSettled(
-          threads.slice(0, 6).map(async t => {
+          threads.slice(0, 4).map(async t => {
             const thread = await gmail.users.threads.get({
               userId: 'me', id: t.id, format: 'metadata',
               metadataHeaders: ['Subject', 'From']
@@ -122,7 +122,7 @@ If nothing executable, return [].`;
 
     const message = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2000,
+      max_tokens: 800,
       messages: [{ role: 'user', content: prompt }]
     });
 
