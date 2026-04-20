@@ -48,6 +48,7 @@
   --c-morrell:#5e20c0;   /* amethyst */
   --c-holiday:#1a4fc4;   /* sapphire */
   --c-white:#a06800;     /* antique gold */
+  --c-browdy:#2e7d8c;    /* teal */
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;overflow:hidden;}
@@ -758,6 +759,9 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
         <span class="rail-nav-icon">⏳</span> Waiting On
         <span class="rail-nav-badge rose" id="tb-waiting">0</span>
       </button>
+      <button class="rail-nav-item" data-tab="metrics" onclick="switchTab('metrics',this)">
+        <span class="rail-nav-icon">📈</span> Performance
+      </button>
       <button class="rail-nav-item" data-tab="delegation" onclick="switchTab('delegation',this)">
         <span class="rail-nav-icon">→</span> Delegation
         <span class="rail-nav-badge" id="tb-delegation">0</span>
@@ -896,12 +900,20 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
           <!-- Add row -->
           <div class="add-row">
             <input class="add-inp" id="new-task" placeholder="+ Add a task…" onkeydown="quickAdd(event)" />
-            <select class="mini-sel" id="new-tag">
+            <select class="mini-sel" id="new-tag" onchange="toggleFayeClientSel(this.value)">
               <option value="aaron">Ops Support</option>
               <option value="strategic">Strategic</option>
               <option value="faye">Faye Clients</option>
               <option value="645">Office & Events</option>
               <option value="personal">Personal</option>
+            </select>
+            <select class="mini-sel" id="new-faye-client" style="display:none;">
+              <option value="doherty">Doherty</option>
+              <option value="garcia">Garcia-Huang</option>
+              <option value="morrell">Morrell</option>
+              <option value="holiday">Holiday</option>
+              <option value="white">White</option>
+              <option value="browdy">Browdy Weiner</option>
             </select>
             <select class="mini-sel" id="new-hz">
               <option value="today">Today</option>
@@ -1179,6 +1191,21 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
         <div class="rhythms-grid" id="rhythms-grid"></div>
       </div>
 
+      <!-- METRICS -->
+      <div class="panel" id="panel-metrics" style="flex-direction:column;overflow-y:auto;">
+        <div class="panel-header">
+          <div class="panel-h1">Performance &amp; Impact</div>
+          <div class="panel-sub">Your output, capacity, and impact over time</div>
+          <!-- Time filter tabs -->
+          <div style="display:flex;gap:4px;margin-left:auto;">
+            <button id="mf-week"  onclick="setMetricsFilter('week',this)"  style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:.08em;text-transform:uppercase;padding:4px 10px;border-radius:3px;border:1px solid var(--bm);background:var(--surface);color:var(--t3);cursor:pointer;">Week</button>
+            <button id="mf-month" onclick="setMetricsFilter('month',this)" style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:.08em;text-transform:uppercase;padding:4px 10px;border-radius:3px;border:1px solid var(--bm);background:var(--brand,#2C1654);color:#fff;cursor:pointer;">Month</button>
+            <button id="mf-all"   onclick="setMetricsFilter('all',this)"   style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:.08em;text-transform:uppercase;padding:4px 10px;border-radius:3px;border:1px solid var(--bm);background:var(--surface);color:var(--t3);cursor:pointer;">All Time</button>
+          </div>
+        </div>
+        <div id="metrics-page-body" style="padding:0;flex:1;overflow-y:auto;"></div>
+      </div>
+
       <!-- DELEGATION -->
       <div class="panel" id="panel-delegation" style="flex-direction:column;overflow-y:auto;">
         <div class="panel-header">
@@ -1360,6 +1387,17 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
         <button onclick="mobileSetTag(this,'faye')" style="flex:1;padding:8px;border-radius:6px;background:var(--s2);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--rose);border:1px solid rgba(184,50,72,.2);min-height:44px;">Faye</button>
         <button onclick="mobileSetTag(this,'645')" style="flex:1;padding:8px;border-radius:6px;background:var(--s2);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--teal);border:1px solid rgba(0,122,122,.2);min-height:44px;">Office</button>
         <button onclick="mobileSetTag(this,'personal')" style="flex:1;padding:8px;border-radius:6px;background:var(--s2);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--sage);border:1px solid rgba(21,122,64,.2);min-height:44px;">Personal</button>
+      </div>
+      <!-- Faye client selector — appears when Faye is tapped -->
+      <div id="mobile-faye-client-row" style="display:none;padding:0 20px;margin-bottom:10px;">
+        <select id="mobile-faye-client" style="width:100%;font-family:'DM Mono',monospace;font-size:11px;background:var(--surface);border:1px solid var(--bm);border-radius:6px;padding:10px 12px;color:var(--rose);">
+          <option value="doherty">Doherty</option>
+          <option value="garcia">Garcia-Huang</option>
+          <option value="morrell">Morrell</option>
+          <option value="holiday">Holiday</option>
+          <option value="white">White</option>
+          <option value="browdy">Browdy Weiner</option>
+        </select>
       </div>
       <div style="display:flex;gap:8px;padding:0 20px;margin-bottom:14px;">
         <button onclick="mobileSetHz(this,'today')" style="flex:1;padding:8px;border-radius:6px;background:var(--gold-d);font-family:'DM Mono',monospace;font-size:10px;color:var(--gold);border:1px solid rgba(176,122,48,.2);min-height:44px;">Today</button>
@@ -1550,12 +1588,23 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
       </div>
       <div class="td-field">
         <div class="td-label">Workspace</div>
-        <select class="td-select" id="td-tag">
+        <select class="td-select" id="td-tag" onchange="toggleDrawerFayeClient(this.value)">
           <option value="aaron">Operational Support</option>
           <option value="strategic">Strategic Enablement</option>
           <option value="faye">Faye Clients</option>
           <option value="645">Office & Events</option>
           <option value="personal">Personal</option>
+        </select>
+      </div>
+      <div class="td-field" id="td-faye-client-wrap" style="display:none;">
+        <div class="td-label">Faye Client</div>
+        <select class="td-select" id="td-faye-client">
+          <option value="doherty">Doherty</option>
+          <option value="garcia">Garcia-Huang</option>
+          <option value="morrell">Morrell</option>
+          <option value="holiday">Holiday</option>
+          <option value="white">White</option>
+          <option value="browdy">Browdy Weiner</option>
         </select>
       </div>
     </div>
@@ -1743,6 +1792,7 @@ const CLIENTS=[
   {id:'morrell',label:'Morrell',color:'#9d8ec4'},
   {id:'holiday',label:'Holiday',color:'#6a87c8'},
   {id:'white',label:'White',color:'#c4a882'},
+  {id:'browdy',label:'Browdy Weiner',color:'#2e7d8c'},
 ];
 let S={
   tasks:[],fayeTasks:[],aaronTasks:[],officeTasks:[],
@@ -1750,8 +1800,9 @@ let S={
   waitingItems:[],
   focus:'',doneToday:0,capacity:70,
   hz:'today',fhz:'today',ahz:'today',ws:'all',
-  fayeOpen:{doherty:true,garcia:true,morrell:true,holiday:true,white:true},
+  fayeOpen:{doherty:true,garcia:true,morrell:true,holiday:true,white:true,browdy:true},
   completedMetrics:{total:0,by645:0,byFaye:0,byPersonal:0,byAaron:0,byStrategic:0,byOffice:0,log:[]},
+  agentMetrics:{suggested:0,executed:0},
   iopGrades:{gp:null,events:null,office:null,loop:null},
   goals:[
     {id:'gp',title:'GP Enablement',color:'var(--amber)',desc:'Reduce Aaron\'s operational load. Proactive calendar management, prep materials ready ahead of time.',milestones:[
@@ -1942,6 +1993,352 @@ function calcIOP(){
 }
 
 // ── TABS ──
+
+// ── METRICS PAGE ────────────────────────────────────────────────────────────
+let _metricsFilter = 'month'; // week | month | all
+
+function setMetricsFilter(filter, btn){
+  _metricsFilter = filter;
+  ['week','month','all'].forEach(f => {
+    const el = document.getElementById(`mf-${f}`);
+    if(el){
+      el.style.background = f === filter ? 'var(--brand, #2C1654)' : 'var(--surface)';
+      el.style.color = f === filter ? '#fff' : 'var(--t3)';
+    }
+  });
+  renderMetricsPage();
+}
+
+function renderMetricsPage(){
+  const el = document.getElementById('metrics-page-body');
+  if(!el) return;
+
+  const now = new Date();
+  const cm = S.completedMetrics || {};
+  const log = cm.log || [];
+  const capHistory = S.capHistory || [];
+  const delegations = S.delegations || [];
+  const waiting = S.waitingOn || {};
+
+  // Filter log by time period
+  const cutoff = _metricsFilter === 'week'
+    ? new Date(now.getTime() - 7 * 86400000)
+    : _metricsFilter === 'month'
+    ? new Date(now.getTime() - 30 * 86400000)
+    : new Date(0);
+
+  const filteredLog = log.filter(e => new Date(e.date) >= cutoff);
+
+  // ── Category counts from filtered log ──
+  const cats = {
+    '645': { label: '645 Ops', color: 'var(--amber)', count: 0 },
+    aaron: { label: 'Aaron Queue', color: 'var(--amber)', count: 0 },
+    faye: { label: 'Faye Clients', color: 'var(--rose)', count: 0 },
+    strategic: { label: 'Strategic', color: 'var(--violet)', count: 0 },
+    personal: { label: 'Personal', color: 'var(--sage)', count: 0 },
+    office: { label: 'Office & Events', color: 'var(--teal)', count: 0 },
+    waiting: { label: 'Waiting Resolved', color: 'var(--blue)', count: 0 }
+  };
+  let totalDone = 0;
+  filteredLog.forEach(e => {
+    const key = e.tag || '645';
+    if(cats[key]) { cats[key].count++; totalDone++; }
+  });
+
+  // ── Capacity average from history ──
+  const capAvg = capHistory.length
+    ? Math.round(capHistory.reduce((s, h) => s + h.v, 0) / capHistory.length)
+    : S.capacity || 0;
+
+  // ── Delegations ──
+  const delOpen = delegations.filter(d => d.status === 'open').length;
+  const delDone = delegations.filter(d => d.status === 'done').length;
+  const delOverdue = delegations.filter(d => d.status === 'open' && d.date && new Date(d.date) < now).length;
+
+  // ── Waiting On ──
+  const waitingTotal = Object.values(waiting).reduce((a, b) => a + (b||[]).length, 0);
+
+  // ── Waiting On resolution rate ──
+  // Count resolved items from the completedMetrics log tagged 'waiting'
+  const resolvedWaiting = filteredLog.filter(e => e.tag === 'waiting').length;
+  const totalWaitingEver = resolvedWaiting + waitingTotal;
+  const resolutionRate = totalWaitingEver > 0 ? Math.round((resolvedWaiting / totalWaitingEver) * 100) : 0;
+
+  // ── Agent Queue execution rate ──
+  // Track in S.agentMetrics — incremented when execute is clicked
+  const agentMetrics = S.agentMetrics || { suggested: 0, executed: 0 };
+  const execRate = agentMetrics.suggested > 0
+    ? Math.round((agentMetrics.executed / agentMetrics.suggested) * 100)
+    : null;
+
+  // ── IOP Grades ──
+  const iop = S.iopGrades || {};
+  const iopLabels = { gp: 'Aaron Support', events: 'Events & Ops', office: 'Office Mgmt', loop: 'Close the Loop' };
+  const gradeColor = g => ({ A: 'var(--sage)', B: 'var(--blue)', C: 'var(--amber)', D: 'var(--rose)' }[g] || 'var(--t3)');
+
+  // ── Bar chart helper ──
+  const maxCount = Math.max(...Object.values(cats).map(c => c.count), 1);
+  const barHtml = Object.entries(cats).map(([key, cat]) => {
+    const pct = Math.round((cat.count / maxCount) * 100);
+    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+      <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--t3);width:90px;text-align:right;flex-shrink:0;">${cat.label}</div>
+      <div style="flex:1;background:var(--s2);border-radius:2px;height:14px;overflow:hidden;">
+        <div style="height:100%;width:${pct}%;background:${cat.color};border-radius:2px;transition:width .4s ease;"></div>
+      </div>
+      <div style="font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:${cat.color};width:24px;flex-shrink:0;">${cat.count}</div>
+    </div>`;
+  }).join('');
+
+  // ── 7-day capacity sparkline ──
+  const sparkPoints = capHistory.slice(-7);
+  let sparkHtml = '';
+  if(sparkPoints.length >= 2){
+    const maxV = Math.max(...sparkPoints.map(p => p.v), 1);
+    const minV = Math.min(...sparkPoints.map(p => p.v));
+    const h = 40, w = 180;
+    const pts = sparkPoints.map((p, i) => {
+      const x = (i / (sparkPoints.length - 1)) * w;
+      const y = h - ((p.v - minV) / (maxV - minV + 1)) * h;
+      return `${x},${y}`;
+    }).join(' ');
+    sparkHtml = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="overflow:visible;">
+      <polyline fill="none" stroke="var(--violet)" stroke-width="2" points="${pts}"/>
+      ${sparkPoints.map((p, i) => {
+        const x = (i / (sparkPoints.length - 1)) * w;
+        const y = h - ((p.v - minV) / (maxV - minV + 1)) * h;
+        return `<circle cx="${x}" cy="${y}" r="3" fill="var(--violet)"/>`;
+      }).join('')}
+    </svg>`;
+  } else {
+    sparkHtml = `<div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);">Not enough data yet — keep using the dashboard!</div>`;
+  }
+
+  // ── Daily breakdown (last 7 days) ──
+  const dayMap = {};
+  for(let i = 6; i >= 0; i--){
+    const d = new Date(now); d.setDate(d.getDate() - i);
+    dayMap[d.toDateString()] = 0;
+  }
+  filteredLog.forEach(e => {
+    const dk = new Date(e.date).toDateString();
+    if(dk in dayMap) dayMap[dk]++;
+  });
+  const dayLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const dayMax = Math.max(...Object.values(dayMap), 1);
+  const dailyBarsHtml = Object.entries(dayMap).map(([dk, count]) => {
+    const d = new Date(dk);
+    const label = d.toDateString() === now.toDateString() ? 'Today' : dayLabels[d.getDay()];
+    const pct = Math.round((count / dayMax) * 100);
+    const isToday = d.toDateString() === now.toDateString();
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;">
+      <div style="font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:${count>0?'var(--sage)':'var(--t3)'};">${count||''}</div>
+      <div style="width:100%;background:var(--s2);border-radius:2px;height:48px;display:flex;align-items:flex-end;">
+        <div style="width:100%;height:${Math.max(pct,4)}%;background:${isToday?'var(--violet)':'var(--sage)'};border-radius:2px 2px 0 0;transition:height .4s ease;opacity:${count>0?1:.3};"></div>
+      </div>
+      <div style="font-family:'DM Mono',monospace;font-size:8px;color:${isToday?'var(--violet)':'var(--t3)'};">${label}</div>
+    </div>`;
+  }).join('');
+
+  // ── Open vs done tasks ──
+  const openMain = (S.tasks||[]).filter(t=>!t.done).length;
+  const openAaron = (S.aaronTasks||[]).filter(t=>!t.done).length;
+  const openFaye = (S.fayeTasks||[]).filter(t=>!t.done).length;
+  const totalOpen = openMain + openAaron + openFaye;
+
+  // ── Render everything ──
+  el.innerHTML = `
+    <!-- ── STAT CARDS ROW ── -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-bottom:1px solid var(--b);">
+      ${[
+        { val: totalDone, label: 'Completed', sub: _metricsFilter==='week'?'this week':_metricsFilter==='month'?'this month':'all time', color: 'var(--sage)' },
+        { val: totalOpen, label: 'Open Tasks', sub: 'across all boards', color: 'var(--amber)' },
+        { val: waitingTotal, label: 'Waiting On', sub: 'pending replies', color: 'var(--violet)' },
+        { val: delOpen, label: 'Delegated', sub: `${delOverdue>0?`${delOverdue} overdue`:'none overdue'}`, color: delOverdue>0?'var(--rose)':'var(--teal)' }
+      ].map(s => `<div style="padding:16px 14px;text-align:center;border-right:1px solid var(--b);">
+        <div style="font-family:'DM Mono',monospace;font-size:28px;font-weight:700;color:${s.color};">${s.val}</div>
+        <div style="font-family:'Jost',sans-serif;font-size:12px;color:var(--t2);margin-top:2px;">${s.label}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--t3);letter-spacing:.06em;margin-top:2px;">${s.sub}</div>
+      </div>`).join('')}
+    </div>
+
+    <!-- ── TWO COLUMN BODY ── -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid var(--b);">
+
+      <!-- Left: Tasks by category bar chart -->
+      <div style="padding:18px 20px;border-right:1px solid var(--b);">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);margin-bottom:14px;">Completed by Category</div>
+        ${barHtml || `<div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);">No completions yet — start checking things off!</div>`}
+        <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--t3);margin-top:10px;padding-top:10px;border-top:1px solid var(--b);">
+          Total: <strong style="color:var(--t);">${totalDone}</strong> tasks completed
+        </div>
+      </div>
+
+      <!-- Right: Daily output (last 7 days) -->
+      <div style="padding:18px 20px;">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);margin-bottom:14px;">Daily Output — Last 7 Days</div>
+        <div style="display:flex;gap:4px;align-items:flex-end;height:80px;">
+          ${dailyBarsHtml}
+        </div>
+      </div>
+    </div>
+
+    <!-- ── CAPACITY TREND ── -->
+    <div style="padding:18px 20px;border-bottom:1px solid var(--b);">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);">Capacity Trend — Last 7 Days</div>
+        <div style="font-family:'DM Mono',monospace;font-size:11px;color:${capAvg>=90?'var(--rose)':capAvg>=70?'var(--amber)':'var(--sage)'};">
+          Avg ${capAvg}% ${capAvg>=90?'· Over capacity':capAvg>=70?'· At capacity':'· Room available'}
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:20px;">
+        ${sparkHtml}
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--t3);line-height:1.8;">
+          ${capHistory.length>0?capHistory.slice(-7).map(h=>`<div>${new Date(h.date).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}: <strong style="color:var(--t2);">${h.v}%</strong></div>`).join(''):'No history yet'}
+        </div>
+      </div>
+    </div>
+
+    <!-- ── IOP GRADES + DELEGATION ── -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid var(--b);">
+
+      <!-- IOP grades -->
+      <div style="padding:18px 20px;border-right:1px solid var(--b);">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);margin-bottom:14px;">IOP Grades — Current</div>
+        ${Object.entries(iopLabels).map(([id, label]) => {
+          const grade = iop[id];
+          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--b);">
+            <div style="font-family:'Jost',sans-serif;font-size:13px;color:var(--t2);">${label}</div>
+            <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:${gradeColor(grade)};min-width:28px;text-align:center;">${grade||'—'}</div>
+          </div>`;
+        }).join('')}
+        <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--t3);margin-top:10px;">Tap ✦ IOP Grading to update your scores</div>
+      </div>
+
+      <!-- Delegation stats -->
+      <div style="padding:18px 20px;">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);margin-bottom:14px;">Delegation Log</div>
+        ${[
+          { label: 'Open', val: delOpen, color: 'var(--amber)' },
+          { label: 'Completed', val: delDone, color: 'var(--sage)' },
+          { label: 'Overdue', val: delOverdue, color: 'var(--rose)' },
+          { label: 'Total', val: delegations.length, color: 'var(--t2)' }
+        ].map(d => `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--b);">
+          <div style="font-family:'Jost',sans-serif;font-size:13px;color:var(--t2);">${d.label}</div>
+          <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:${d.color};">${d.val}</div>
+        </div>`).join('')}
+        <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--t3);margin-top:10px;">Track what you've handed off — Delegation Log panel for details</div>
+      </div>
+    </div>
+
+    <!-- ── WAITING ON BREAKDOWN ── -->
+    <div style="padding:18px 20px;border-bottom:1px solid var(--b);">
+      <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);margin-bottom:14px;">Waiting On — By Workspace</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
+        ${['645','aaron','faye','personal'].map(ws => {
+          const items = waiting[ws] || [];
+          const colors = { '645':'var(--amber)', aaron:'var(--amber)', faye:'var(--rose)', personal:'var(--sage)' };
+          const labels = { '645':'645 Ops', aaron:'Aaron', faye:'Faye Clients', personal:'Personal' };
+          return `<div style="text-align:center;padding:12px 8px;background:var(--surface);border-radius:4px;border:1px solid var(--b);">
+            <div style="font-family:'DM Mono',monospace;font-size:22px;font-weight:700;color:${colors[ws]};">${items.length}</div>
+            <div style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);margin-top:4px;">${labels[ws]}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <!-- ── WAITING ON RESOLUTION + AGENT EXEC + CAPACITY ── -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border-bottom:1px solid var(--b);">
+
+      <!-- Waiting On resolution rate -->
+      <div style="padding:18px 16px;border-right:1px solid var(--b);">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);margin-bottom:14px;">Waiting On Resolution Rate</div>
+        <div style="text-align:center;padding:8px 0;">
+          <div style="font-family:'DM Mono',monospace;font-size:38px;font-weight:700;color:${resolutionRate>=70?'var(--sage)':resolutionRate>=40?'var(--amber)':'var(--rose)'};">${resolutionRate}%</div>
+          <div style="font-family:'Jost',sans-serif;font-size:11px;color:var(--t3);margin-top:4px;">${resolvedWaiting} resolved · ${waitingTotal} open</div>
+        </div>
+        <div style="margin-top:12px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--t3);width:60px;">Resolved</div>
+            <div style="flex:1;background:var(--s2);border-radius:2px;height:8px;overflow:hidden;">
+              <div style="height:100%;width:${resolutionRate}%;background:var(--sage);border-radius:2px;"></div>
+            </div>
+            <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--sage);width:24px;">${resolvedWaiting}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--t3);width:60px;">Open</div>
+            <div style="flex:1;background:var(--s2);border-radius:2px;height:8px;overflow:hidden;">
+              <div style="height:100%;width:${totalWaitingEver>0?Math.round((waitingTotal/totalWaitingEver)*100):0}%;background:var(--violet);border-radius:2px;"></div>
+            </div>
+            <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--violet);width:24px;">${waitingTotal}</div>
+          </div>
+        </div>
+        <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--t3);margin-top:10px;">Resolve items via ✓ in the Waiting On panel</div>
+      </div>
+
+      <!-- Agent Queue execution rate -->
+      <div style="padding:18px 16px;border-right:1px solid var(--b);">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);margin-bottom:14px;">Agent Queue Execution Rate</div>
+        ${execRate !== null ? `
+          <div style="text-align:center;padding:8px 0;">
+            <div style="font-family:'DM Mono',monospace;font-size:38px;font-weight:700;color:${execRate>=60?'var(--sage)':execRate>=30?'var(--amber)':'var(--violet)'};">${execRate}%</div>
+            <div style="font-family:'Jost',sans-serif;font-size:11px;color:var(--t3);margin-top:4px;">${agentMetrics.executed} executed of ${agentMetrics.suggested} suggested</div>
+          </div>
+          <div style="margin-top:12px;">
+            <div style="background:var(--s2);border-radius:3px;height:12px;overflow:hidden;margin-bottom:6px;">
+              <div style="height:100%;width:${execRate}%;background:linear-gradient(90deg,var(--violet),var(--sage));border-radius:3px;transition:width .4s ease;"></div>
+            </div>
+            <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--t3);">${execRate>=60?'High execution \u2014 acting on suggestions':'Keep reviewing the Agent Queue daily for quick wins'}</div>
+          </div>` : `
+          <div style="text-align:center;padding:16px 0;">
+            <div style="font-size:28px;margin-bottom:8px;">✦</div>
+            <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);">No executions tracked yet</div>
+            <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--t3);margin-top:6px;line-height:1.5;">Use the Agent Queue panel and execute suggested actions to track your rate</div>
+          </div>`}
+      </div>
+
+      <!-- Capacity trend detail -->
+      <div style="padding:18px 16px;">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);margin-bottom:14px;">Capacity Overview</div>
+        <div style="text-align:center;padding:8px 0;">
+          <div style="font-family:'DM Mono',monospace;font-size:38px;font-weight:700;color:${S.capacity>=90?'var(--rose)':S.capacity>=70?'var(--amber)':'var(--sage)'};">${S.capacity||0}%</div>
+          <div style="font-family:'Jost',sans-serif;font-size:11px;color:var(--t3);margin-top:4px;">${S.capacity>=90?'Over capacity':S.capacity>=70?'At capacity':'Room available'} · Today</div>
+        </div>
+        <div style="margin-top:12px;">
+          <div style="background:var(--s2);border-radius:3px;height:12px;overflow:hidden;margin-bottom:8px;">
+            <div style="height:100%;width:${Math.min(S.capacity||0,100)}%;background:${S.capacity>=90?'var(--rose)':S.capacity>=70?'var(--amber)':'var(--sage)'};border-radius:3px;transition:width .4s ease;"></div>
+          </div>
+          <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--t3);line-height:1.8;">
+            ${capHistory.slice(-5).reverse().map(h =>
+              `<div style="display:flex;justify-content:space-between;">
+                <span>${new Date(h.date).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</span>
+                <span style="color:${h.v>=90?'var(--rose)':h.v>=70?'var(--amber)':'var(--sage)'};">${h.v}%</span>
+              </div>`
+            ).join('') || '<div>No history yet</div>'}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── RECENT COMPLETIONS LOG ── -->
+    <div style="padding:18px 20px;">
+      <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);margin-bottom:14px;">Recent Completions</div>
+      ${filteredLog.length === 0
+        ? `<div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--t3);padding:12px 0;">No completions in this period yet. Start checking off tasks!</div>`
+        : filteredLog.slice().reverse().slice(0, 20).map(e => {
+          const tagColors = { '645':'var(--amber)', aaron:'var(--amber)', faye:'var(--rose)', personal:'var(--sage)', strategic:'var(--violet)', office:'var(--teal)', waiting:'var(--blue)' };
+          const tagLabels = { '645':'645', aaron:'Aaron', faye:'Faye', personal:'Personal', strategic:'Strategic', office:'Office', waiting:'Waiting' };
+          const date = new Date(e.date);
+          const dateStr = date.toDateString()===now.toDateString() ? 'Today' : date.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+          return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--b);">
+            <span style="color:var(--sage);font-size:13px;flex-shrink:0;">✓</span>
+            <div style="flex:1;font-family:'Jost',sans-serif;font-size:13px;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.title||'Task completed'}</div>
+            <span style="font-family:'DM Mono',monospace;font-size:7px;padding:2px 6px;border-radius:2px;background:${(tagColors[e.tag]||'var(--t3)')+('1A')};color:${tagColors[e.tag]||'var(--t3)'};flex-shrink:0;">${tagLabels[e.tag]||e.tag||'—'}</span>
+            <span style="font-family:'DM Mono',monospace;font-size:8px;color:var(--t3);flex-shrink:0;">${dateStr}</span>
+          </div>`;
+        }).join('')}
+    </div>`;
+}
+
 // ── MOBILE TAB SWITCHING ──
 // 4-tab mobile nav: Tasks | Calendar | Agent | Tools
 // Tasks = My Priorities full height (center calendar col + sidebar hidden)
@@ -2055,6 +2452,7 @@ function switchTab(tab,btn){
     if(tab==='people')renderPeople();
     if(tab==='waiting')renderWaiting();
     if(tab==='rhythms')renderRhythms();
+    if(tab==='metrics'){renderMetricsPage();}
     if(tab==='delegation')renderDelegation();
     if(tab==='agent')renderAgentPanel();
   }
@@ -2241,9 +2639,41 @@ function toggleT(id){const t=S.tasks.find(t=>t.id===id);if(!t)return;t.done=!t.d
 function toggleFT(id){const t=S.fayeTasks.find(t=>t.id===id);if(!t)return;t.done=!t.done;if(t.done){trackCompletion('faye',t.title);setTimeout(()=>{render();renderFaye();updateBadges();},400);}else{render();renderFaye();updateBadges();}save();metrics();}
 function toggleAT(id){const t=S.aaronTasks.find(t=>t.id===id);if(!t)return;t.done=!t.done;if(t.done){trackCompletion('aaron',t.title);setTimeout(()=>{render();renderAaron();updateBadges();},400);}else{render();renderAaron();updateBadges();}save();metrics();}
 
-function quickAdd(e){if(e.key!=='Enter')return;const i=document.getElementById('new-task'),v=i.value.trim();if(!v)return;addTask(v,document.getElementById('new-tag').value,document.getElementById('new-hz').value);i.value='';i.focus();}
+function quickAdd(e){
+  if(e.key!=='Enter')return;
+  const i=document.getElementById('new-task'),v=i.value.trim();
+  if(!v)return;
+  const tag=document.getElementById('new-tag').value;
+  const hz=document.getElementById('new-hz').value;
+  if(tag==='faye'){
+    const client=document.getElementById('new-faye-client')?.value||'doherty';
+    addFT(v,client,hz,'med','');
+  } else {
+    addTask(v,tag,hz);
+  }
+  i.value='';i.focus();
+}
+function toggleCftFayeClient(sel, clientSelectId){
+  const clientSel = document.getElementById(clientSelectId);
+  if(clientSel) clientSel.style.display = sel.value==='faye' ? 'inline-block' : 'none';
+}
+function toggleDrawerFayeClient(tag){
+  const wrap = document.getElementById('td-faye-client-wrap');
+  if(wrap) wrap.style.display = tag==='faye' ? '' : 'none';
+}
+function toggleFayeClientSel(tag){
+  const sel=document.getElementById('new-faye-client');
+  if(sel) sel.style.display=tag==='faye'?'inline-block':'none';
+}
 function quickAddAaron(e){if(e.key!=='Enter')return;const i=document.getElementById('aaron-quick-inp'),v=i.value.trim();if(!v)return;addAT(v,document.getElementById('aaron-hz-sel').value);i.value='';i.focus();}
 function quickAddFaye(e,clientId){if(e.key!=='Enter')return;const v=e.target.value.trim();if(!v)return;addFT(v,clientId,S.fhz);e.target.value='';e.target.focus();}
+function quickAddFayeWithClient(e,selectId){
+  if(e.key!=='Enter')return;
+  const v=e.target.value.trim();if(!v)return;
+  const client=document.getElementById(selectId)?.value||'doherty';
+  addFT(v,client,S.fhz);
+  e.target.value='';e.target.focus();
+}
 
 // ── RENDER TASKS ──
 function render(){
@@ -2312,7 +2742,12 @@ function renderFaye(){
               <button onclick="deleteFayeTask(${t.id})" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px;border-radius:2px;transition:color .15s;" onmouseover="this.style.color='var(--rose)'" onmouseout="this.style.color='var(--t3)'">✕</button>
             </div>
           </div>`).join(''):'<div class="empty-msg" style="font-size:15px;padding:12px 18px;">Nothing for this period.</div>'}
-        <div class="faye-add"><input class="faye-add-inp" placeholder="+ Add task for ${client.label}…" onkeydown="quickAddFaye(event,'${client.id}')" /></div>
+        <div class="faye-add" style="display:flex;gap:6px;align-items:center;">
+          <select id="faye-add-client-${client.id}" style="font-family:'DM Mono',monospace;font-size:9px;background:var(--surface);border:1px solid var(--bm);border-radius:3px;color:var(--t2);padding:4px 6px;flex-shrink:0;height:28px;">
+            ${CLIENTS.map(c=>`<option value="${c.id}" ${c.id===client.id?'selected':''}>${c.label}</option>`).join('')}
+          </select>
+          <input class="faye-add-inp" style="flex:1;" placeholder="+ Add a Faye task…" onkeydown="quickAddFayeWithClient(event,'faye-add-client-${client.id}')" />
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -3031,7 +3466,11 @@ function addScreenshotTask(i){
 
   const tag = document.getElementById('cap-tag')?.value || t.workspace || '645';
 
-  if(tag === 'faye') addFT(t.task, 'doherty', 'today', t.priority||'med', 'From screenshot');
+  if(tag === 'faye'){
+    const clientSel = document.getElementById(`cft-client-${i}`);
+    const client = clientSel?.value || t.client || 'doherty';
+    addFT(t.task, client, 'today', t.priority||'med', 'From screenshot');
+  }
   else if(tag === 'aaron' || tag === 'strategic') addAT(t.task, 'today', t.priority||'med', 'From screenshot');
   else addTask(t.task, tag, 'today', t.priority||'med', 'From screenshot');
 
@@ -3258,7 +3697,7 @@ ${rawText.slice(0, 6000)}`
         <div style="width:6px;height:6px;border-radius:50%;background:${priColors[t.priority] || 'var(--t3)'};flex-shrink:0;margin-top:4px;"></div>
         <div style="flex:1;min-width:0;">
           <div style="font-size:12px;color:var(--t);line-height:1.4;margin-bottom:4px;">${t.task}</div>
-          <select id="cft-cat-${i}" style="font-family:'DM Mono',monospace;font-size:10px;background:var(--s2);border:1px solid var(--bm);border-radius:2px;padding:2px 4px;color:var(--t2);outline:none;cursor:pointer;" onclick="event.stopPropagation()"><option value='645'>Office &amp; Events</option><option value='aaron'>Ops Support</option><option value='strategic'>Strategic</option><option value='faye'>Faye Clients</option><option value='personal'>Personal</option></select>
+          <select id="cft-cat-${i}" style="font-family:'DM Mono',monospace;font-size:10px;background:var(--s2);border:1px solid var(--bm);border-radius:2px;padding:2px 4px;color:var(--t2);outline:none;cursor:pointer;" onclick="event.stopPropagation()" onchange="toggleCftFayeClient(this,'cft-client-${i}')"><option value='645'>Office &amp; Events</option><option value='aaron'>Ops Support</option><option value='strategic'>Strategic</option><option value='faye'>Faye Clients</option><option value='personal'>Personal</option></select> <select id="cft-client-${i}" style="display:none;font-family:'DM Mono',monospace;font-size:10px;background:var(--s2);border:1px solid var(--bm);border-radius:2px;padding:2px 4px;color:var(--t2);outline:none;cursor:pointer;" onclick="event.stopPropagation()"><option value='doherty'>Doherty</option><option value='garcia'>Garcia-Huang</option><option value='morrell'>Morrell</option><option value='holiday'>Holiday</option><option value='white'>White</option><option value='browdy'>Browdy Weiner</option></select>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
           <button onclick="addCapturedFileTask(${i})" style="background:var(--t);color:var(--bg);border:none;border-radius:2px;padding:3px 8px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;white-space:nowrap;">+ add</button>
@@ -3289,7 +3728,11 @@ function addCapturedFileTask(i) {
   // Read category from the inline dropdown on the card, fall back to Claude's guess
   const catSel = document.getElementById(`cft-cat-${i}`);
   const tag = catSel?.value || t.workspace || '645';
-  if (tag === 'faye')                          addFT(t.task, 'doherty', 'today', t.priority || 'med', 'From file');
+  if (tag === 'faye'){
+    const clientSel = document.getElementById(`cft-client-${i}`);
+    const client = clientSel?.value || t.client || 'doherty';
+    addFT(t.task, client, 'today', t.priority || 'med', 'From file');
+  }
   else if (tag === 'aaron' || tag === 'strategic') addAT(t.task, 'today', t.priority || 'med', 'From file');
   else                                         addTask(t.task, tag, 'today', t.priority || 'med', 'From file');
 
@@ -3375,7 +3818,7 @@ ${text.slice(0, 6000)}`
         <div style="width:6px;height:6px;border-radius:50%;background:${priColors[t.priority] || 'var(--t3)'};flex-shrink:0;margin-top:4px;"></div>
         <div style="flex:1;min-width:0;">
           <div style="font-size:12px;color:var(--t);line-height:1.4;margin-bottom:4px;">${t.task}</div>
-          <select id="cft-cat-${i}" style="font-family:'DM Mono',monospace;font-size:10px;background:var(--s2);border:1px solid var(--bm);border-radius:2px;padding:2px 4px;color:var(--t2);outline:none;cursor:pointer;" onclick="event.stopPropagation()"><option value='645'>Office &amp; Events</option><option value='aaron'>Ops Support</option><option value='strategic'>Strategic</option><option value='faye'>Faye Clients</option><option value='personal'>Personal</option></select>
+          <select id="cft-cat-${i}" style="font-family:'DM Mono',monospace;font-size:10px;background:var(--s2);border:1px solid var(--bm);border-radius:2px;padding:2px 4px;color:var(--t2);outline:none;cursor:pointer;" onclick="event.stopPropagation()" onchange="toggleCftFayeClient(this,'cft-client-${i}')"><option value='645'>Office &amp; Events</option><option value='aaron'>Ops Support</option><option value='strategic'>Strategic</option><option value='faye'>Faye Clients</option><option value='personal'>Personal</option></select> <select id="cft-client-${i}" style="display:none;font-family:'DM Mono',monospace;font-size:10px;background:var(--s2);border:1px solid var(--bm);border-radius:2px;padding:2px 4px;color:var(--t2);outline:none;cursor:pointer;" onclick="event.stopPropagation()"><option value='doherty'>Doherty</option><option value='garcia'>Garcia-Huang</option><option value='morrell'>Morrell</option><option value='holiday'>Holiday</option><option value='white'>White</option><option value='browdy'>Browdy Weiner</option></select>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
           <button onclick="addCapturedFileTask(${i})" style="background:var(--t);color:var(--bg);border:none;border-radius:2px;padding:3px 8px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;white-space:nowrap;">+ add</button>
@@ -3609,9 +4052,9 @@ async function runIntake(){
   let total=0;
   if(notes||faye||aaron||office){
     try{
-      const combined=`GENERAL NOTES:\n${notes}\n\nFAYE CLIENT TASKS (new tasks, updates from Garcia-Huang or Holiday recurring syncs — clients: doherty, garcia, morrell, holiday, white):\n${faye}\n\nASANA TASKS TAGGED TO ME:\n${asanaTrimmed}\n\nAARON TASKS:\n${aaron}\n\nOFFICE TASKS:\n${office}`;
+      const combined=`GENERAL NOTES:\n${notes}\n\nFAYE CLIENT TASKS (new tasks, updates from Garcia-Huang or Holiday recurring syncs — clients: doherty, garcia, morrell, holiday, white, browdy):\n${faye}\n\nASANA TASKS TAGGED TO ME:\n${asanaTrimmed}\n\nAARON TASKS:\n${aaron}\n\nOFFICE TASKS:\n${office}`;
       const raw=await claude(
-        `Parse this morning intake. Return ONLY JSON array. Each: {"title":string,"type":"task"|"faye"|"aaron"|"office","tag":"645"|"personal","client":"doherty"|"garcia"|"morrell"|"holiday"|"white"|null,"priority":"high"|"med"|"low","hz":"today"|"week"|"month"|"someday","note":string}. For faye items set type=faye and client. For asana tasks set type=task tag=645. If Faye sync with Garcia-Huang or Holiday happened, treat their deadlines as high priority. Natasha is EA/Office Manager at 645 Ventures, manages Aaron Holiday, consults via Faye for 5 families.`,
+        `Parse this morning intake. Return ONLY JSON array. Each: {"title":string,"type":"task"|"faye"|"aaron"|"office","tag":"645"|"personal","client":"doherty"|"garcia"|"morrell"|"holiday"|"white"|"browdy"|null,"priority":"high"|"med"|"low","hz":"today"|"week"|"month"|"someday","note":string}. For faye items set type=faye and client. For asana tasks set type=task tag=645. If Faye sync with Garcia-Huang or Holiday happened, treat their deadlines as high priority. Natasha is EA/Office Manager at 645 Ventures, manages Aaron Holiday, consults via Faye for 5 families.`,
         combined,2000
       );
       let items=[];try{items=JSON.parse(raw.replace(/```json|```/g,'').trim());}catch(e){}
@@ -4066,15 +4509,25 @@ function openTaskDrawer(id, type='main'){
   const hzEl = document.getElementById('td-hz');
   if(hzEl) hzEl.value = t.hz || 'today';
 
-  // Tag (main tasks only)
+  // Tag (main tasks only) + Faye client selector
   const tagEl = document.getElementById('td-tag');
   const tagRow = tagEl?.parentElement?.parentElement;
+  const fayeClientWrap = document.getElementById('td-faye-client-wrap');
+  const fayeClientEl = document.getElementById('td-faye-client');
   if(tagRow){
     if(type==='main'){
       tagRow.style.display = '';
       if(tagEl) tagEl.value = t.tag || '645';
+      // Show client selector if tag is faye
+      if(fayeClientWrap) fayeClientWrap.style.display = (t.tag==='faye') ? '' : 'none';
+    } else if(type==='faye'){
+      tagRow.style.display = 'none';
+      // Always show client selector for faye tasks
+      if(fayeClientWrap){ fayeClientWrap.style.display = ''; }
+      if(fayeClientEl) fayeClientEl.value = t.client || 'doherty';
     } else {
       tagRow.style.display = 'none';
+      if(fayeClientWrap) fayeClientWrap.style.display = 'none';
     }
   }
 
@@ -4139,6 +4592,15 @@ function saveTaskDrawer(){
   if(type==='main'){
     const tagEl = document.getElementById('td-tag');
     if(tagEl && tagEl.value) t.tag = tagEl.value;
+    // If main task is reassigned to faye, save client too
+    if(tagEl && tagEl.value === 'faye'){
+      const fayeClientEl = document.getElementById('td-faye-client');
+      if(fayeClientEl) t.client = fayeClientEl.value;
+    }
+  } else if(type==='faye'){
+    // Save faye client selection
+    const fayeClientEl = document.getElementById('td-faye-client');
+    if(fayeClientEl) t.client = fayeClientEl.value;
   }
 
   save();
@@ -4598,6 +5060,13 @@ async function loadAgentQueue(){
     const data = await r.json();
     _agentItems = data.items || [];
 
+    // Track how many suggestions were surfaced for metrics
+    if(_agentItems.length > 0){
+      if(!S.agentMetrics) S.agentMetrics = {suggested:0, executed:0};
+      S.agentMetrics.suggested += _agentItems.length;
+      save();
+    }
+
     if(loading) loading.style.display = 'none';
     if(btn){ btn.disabled = false; btn.textContent = '✦ Refresh Queue'; }
     if(railIcon) railIcon.classList.remove('spinning');
@@ -4777,6 +5246,9 @@ async function executeAgentQueue(){
       if(statusEl){ statusEl.style.display='block'; statusEl.textContent='✅'; }
       if(itemEl){ itemEl.style.opacity='0.5'; itemEl.style.borderColor='var(--sage)'; }
       succeeded++;
+      if(!S.agentMetrics) S.agentMetrics = {suggested:0, executed:0};
+      S.agentMetrics.executed++;
+      save();
     } catch(e) {
       if(statusEl){ statusEl.style.display='block'; statusEl.textContent='❌'; }
       failed++;
@@ -4849,6 +5321,9 @@ function mobileSetTag(btn, tag){
   _mobileTag = tag;
   btn.closest('div').querySelectorAll('button').forEach(b=>b.style.opacity='.5');
   btn.style.opacity='1';
+  // Show/hide Faye client selector
+  const fayeRow = document.getElementById('mobile-faye-client-row');
+  if(fayeRow) fayeRow.style.display = tag==='faye' ? 'block' : 'none';
 }
 function mobileSetHz(btn, hz){
   _mobileHz = hz;
@@ -4859,9 +5334,16 @@ function mobileAddTask(){
   const inp = document.getElementById('mobile-task-inp');
   const title = inp ? inp.value.trim() : '';
   if(!title) return;
-  addTask(title, _mobileTag, _mobileHz, 'med', '');
+  if(_mobileTag === 'faye'){
+    const client = document.getElementById('mobile-faye-client')?.value || 'doherty';
+    addFT(title, client, _mobileHz, 'med', '');
+    renderFaye();
+  } else {
+    addTask(title, _mobileTag, _mobileHz, 'med', '');
+  }
   inp.value = '';
   document.getElementById('mobile-quick-add-sheet').style.display = 'none';
+  document.getElementById('mobile-faye-client-row').style.display = 'none';
   render(); updateBadges();
 }
 
