@@ -28,11 +28,13 @@ module.exports = async (req, res) => {
     const aaronTasks = (state.aaronTasks || []).filter(t => !t.done)
       .map(t => `[AARON][${t.hz}][${t.priority}] ${t.title}${t.note ? ' — ' + t.note : ''}`).join('\n');
     const waiting = Object.entries(state.waitingOn || {})
-      .map(([k, v]) => v.map(w => `[WAITING/${k.toUpperCase()}] ${w.person}: ${w.what}`).join('\n')).join('\n');
+      .map(([k, v]) => (v || []).map(w => `[WAITING/${k.toUpperCase()}] ${w.person}: ${w.what}`).join('\n')).join('\n');
 
+    // Get recent emails for context — with tight timeout
     let emailContext = '';
     try {
-      const tokenCookie = parseCookies(req)['gcal_tokens'];
+      const cookies = parseCookies(req);
+      const tokenCookie = cookies['gcal_tokens'];
       if (tokenCookie) {
         const tokens = JSON.parse(Buffer.from(tokenCookie, 'base64').toString('utf8'));
         const oauth2Client = getOAuth2Client();
@@ -40,7 +42,9 @@ module.exports = async (req, res) => {
         const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
         const listRes = await Promise.race([
           gmail.users.threads.list({
-            userId: 'me', q: 'is:unread newer_than:7d -from:noreply', maxResults: 8
+            userId: 'me',
+            q: 'newer_than:3d (from:aholidayiii@645ventures.com OR from:natasha.holiday@rbccm.com) -from:noreply',
+            maxResults: 6
           }),
           new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
         ]);
@@ -54,43 +58,46 @@ module.exports = async (req, res) => {
             const latest = thread.data.messages?.[thread.data.messages.length - 1];
             const headers = {};
             (latest?.payload?.headers || []).forEach(h => { headers[h.name] = h.value; });
-            return `- ${headers['Subject'] || '(no subject)'} | from: ${headers['From'] || 'unknown'} | ${latest?.snippet?.substring(0, 80) || ''}`;
+            return `- "${headers['Subject'] || '(no subject)'}" from ${headers['From'] || 'unknown'}: ${latest?.snippet?.substring(0, 100) || ''}`;
           })
         );
         emailContext = summaries.filter(r => r.status === 'fulfilled').map(r => r.value).join('\n');
       }
     } catch(e) { emailContext = ''; }
 
-    const prompt = `You are Natasha Bradley's Chief of Staff AI. Natasha is EA & Office Manager at 645 Ventures NYC, working toward a Chief of Staff promotion.
+    const prompt = `You are Natasha Bradley's Chief of Staff AI. Natasha is EA & Office Manager at 645 Ventures NYC, managing Aaron Holiday (Co-founder & Managing Partner).
 
 TODAY: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
 
 HER DASHBOARD:
 TASKS: ${tasks || 'None'}
-FAYE: ${fayeTasks || 'None'}
+FAYE CLIENT TASKS: ${fayeTasks || 'None'}
 AARON QUEUE: ${aaronTasks || 'None'}
 WAITING ON: ${waiting || 'None'}
-${emailContext ? `RECENT EMAILS:\n${emailContext}` : ''}
+${emailContext ? `RECENT EMAILS FROM KEY PEOPLE:\n${emailContext}` : ''}
 
-Identify up to 5 small, EXECUTABLE tasks to take off her plate RIGHT NOW.
+Your job: identify up to 5 concrete, executable actions you can do RIGHT NOW to help Natasha.
 
-Rules:
-- Only include tasks with clear, specific actions
-- Only use these tools: draft_email, calendar_event, add_task, slack_message, log_delegation
-- Be specific — include actual content, recipients, dates
-- Prioritize high-impact items (time-sensitive, Aaron-related, or overdue)
+Look for:
+1. Tasks that need a draft email sent (scheduling, follow-up, confirmation)
+2. Calendar events that need to be created
+3. Anything in the WAITING ON list that is overdue and needs a follow-up message
+4. Aaron queue items that need immediate action
+5. Any email snippets above that need a response or action taken
 
-Return ONLY a valid JSON array, no markdown, no comments:
+IMPORTANT: Always return at least 1-2 items. If nothing urgent exists, surface the most important pending task for follow-up or create a useful calendar placeholder.
+
+Tools available: draft_email, calendar_event, add_task, slack_message, log_delegation
+
+Return ONLY a valid JSON array, no markdown:
 [{"id":"string","title":"Short title under 8 words","description":"Exactly what I will do","tool":"draft_email|calendar_event|add_task|slack_message|log_delegation","priority":"high|med|low","workspace":"645|faye|personal|aaron|strategic","data":{}}]
 
 data shape per tool:
-- draft_email: {"to":"email","subject":"subject","body":"full body"}
+- draft_email: {"to":"email","subject":"subject","body":"full body text"}
 - calendar_event: {"title":"title","date":"YYYY-MM-DD","time":"HH:MM","duration_min":30,"calendar":"nbradley@645ventures.com","description":"notes"}
 - add_task: {"title":"title","tag":"645|faye|personal|aaron|strategic","hz":"today|week|month","priority":"high|med|low","note":"context"}
-- slack_message: {"channel":"channel","message":"full message"}
-- log_delegation: {"person":"name","what":"what","due":"YYYY-MM-DD or null","workspace":"645"}
-
-If nothing executable, return [].`;
+- slack_message: {"channel":"channel-name","message":"full message text"}
+- log_delegation: {"person":"name","what":"what","due":"YYYY-MM-DD or null","workspace":"645"}`;
 
     const message = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
