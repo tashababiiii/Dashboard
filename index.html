@@ -842,6 +842,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
             <button class="hz-tab" onclick="setHz('week',this)">Week<span class="hz-cnt" id="c-week">0</span></button>
             <button class="hz-tab" onclick="setHz('month',this)">Month<span class="hz-cnt" id="c-month">0</span></button>
             <button class="hz-tab" onclick="setHz('someday',this)">Someday<span class="hz-cnt" id="c-someday">0</span></button>
+            <button class="hz-tab" onclick="setHz('completed',this)" style="color:var(--sage);">✓ Done<span class="hz-cnt" id="c-completed" style="background:rgba(21,122,64,.12);color:var(--sage);">0</span></button>
           </div>
 
           <!-- Add row -->
@@ -864,6 +865,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 
           <!-- Task list (unified — all tasks including aaron tasks folded in) -->
           <div class="task-list" id="task-list" style="flex:1;overflow-y:auto;"></div>
+          <div id="completed-list" style="display:none;flex:1;overflow-y:auto;"></div>
 
           <!-- Faye clients (shown when ws=faye or all) -->
           <div id="col-faye" style="display:none;flex-direction:column;border-top:1px solid var(--b);">
@@ -894,16 +896,28 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
             <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:500;color:var(--t);">Today's Schedule</div>
           </div>
 
-          <!-- Calendar toggle: Aaron / My Calendar / Personal / Faye -->
+          <!-- Calendar toggle: All / Aaron / 645 / Personal / Faye -->
           <div style="display:flex;border-bottom:1px solid var(--b);flex-shrink:0;overflow-x:auto;" id="cal-toggle-tabs">
-            <button class="hz-tab active" style="font-size:11px;border-right:1px solid var(--b);white-space:nowrap;" onclick="switchCalView('aaron',this)">Aaron</button>
+            <button class="hz-tab active" style="font-size:11px;border-right:1px solid var(--b);white-space:nowrap;" onclick="switchCalView('all',this)">All</button>
+            <button class="hz-tab" style="font-size:11px;border-right:1px solid var(--b);white-space:nowrap;" onclick="switchCalView('aaron',this)">Aaron</button>
             <button class="hz-tab" style="font-size:11px;border-right:1px solid var(--b);white-space:nowrap;" onclick="switchCalView('mine',this)">645</button>
             <button class="hz-tab" style="font-size:11px;border-right:1px solid var(--b);white-space:nowrap;" onclick="switchCalView('personal',this)">Personal</button>
             <button class="hz-tab" style="font-size:11px;white-space:nowrap;" onclick="switchCalView('faye',this)">Faye</button>
           </div>
 
+          <!-- All calendars merged view (default) -->
+          <div id="cal-view-all" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+            <div id="cal-now-strip" style="padding:6px 14px;border-bottom:1px solid var(--b);display:flex;align-items:center;gap:8px;flex-shrink:0;min-height:30px;">
+              <div class="cal-lbl-dot loading" id="all-cal-dot" style="flex-shrink:0;"></div>
+              <div id="cal-now-text" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);letter-spacing:.04em;">Loading…</div>
+            </div>
+            <div class="cal-sec" style="flex:1;overflow-y:auto;">
+              <div id="all-cal"><div class="cal-skel" style="width:100%"></div><div class="cal-skel" style="width:82%"></div><div class="cal-skel" style="width:90%"></div></div>
+            </div>
+          </div>
+
           <!-- Aaron calendar view -->
-          <div id="cal-view-aaron" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+          <div id="cal-view-aaron" style="flex:1;display:none;flex-direction:column;overflow:hidden;">
             <!-- Now / Up Next indicator -->
             <div id="cal-now-strip" style="padding:6px 14px;border-bottom:1px solid var(--b);display:flex;align-items:center;gap:8px;flex-shrink:0;min-height:30px;">
               <div class="cal-lbl-dot loading" id="aaron-cal-dot" style="flex-shrink:0;"></div>
@@ -1840,7 +1854,21 @@ function setWs(ws,btn){
 
   render();renderFaye();renderAaron();
 }
-function setHz(hz,btn){S.hz=hz;save();document.querySelectorAll('#my-hz .hz-tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');render();}
+function setHz(hz,btn){
+  document.querySelectorAll('#my-hz .hz-tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  const taskList = document.getElementById('task-list');
+  const completedList = document.getElementById('completed-list');
+  if(hz === 'completed'){
+    if(taskList) taskList.style.display = 'none';
+    if(completedList) completedList.style.display = 'block';
+    renderCompleted();
+  } else {
+    if(taskList) taskList.style.display = '';
+    if(completedList) completedList.style.display = 'none';
+    S.hz=hz; save(); render();
+  }
+}
 function setFayeHz(hz,btn){S.fhz=hz;save();document.querySelectorAll('#faye-hz .hz-tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');renderFaye();}
 
 
@@ -1986,8 +2014,8 @@ function addOT(title,category,priority='med'){
 }
 
 function toggleT(id){const t=S.tasks.find(t=>t.id===id);if(!t)return;t.done=!t.done;if(t.done){trackCompletion(t.tag);setTimeout(()=>{render();updateBadges();},400);}else{render();updateBadges();}save();metrics();}
-function toggleFT(id){const t=S.fayeTasks.find(t=>t.id===id);if(!t)return;t.done=!t.done;if(t.done){trackCompletion('faye');setTimeout(()=>{render();renderFaye();updateBadges();},400);}else{render();renderFaye();updateBadges();}save();metrics();}
-function toggleAT(id){const t=S.aaronTasks.find(t=>t.id===id);if(!t)return;t.done=!t.done;if(t.done){trackCompletion('aaron');setTimeout(()=>{render();renderAaron();updateBadges();},400);}else{render();renderAaron();updateBadges();}save();metrics();}
+function toggleFT(id){const t=S.fayeTasks.find(t=>t.id===id);if(!t)return;t.done=!t.done;if(t.done){trackCompletion('faye',t.title);setTimeout(()=>{render();renderFaye();updateBadges();},400);}else{render();renderFaye();updateBadges();}save();metrics();}
+function toggleAT(id){const t=S.aaronTasks.find(t=>t.id===id);if(!t)return;t.done=!t.done;if(t.done){trackCompletion('aaron',t.title);setTimeout(()=>{render();renderAaron();updateBadges();},400);}else{render();renderAaron();updateBadges();}save();metrics();}
 
 function quickAdd(e){if(e.key!=='Enter')return;const i=document.getElementById('new-task'),v=i.value.trim();if(!v)return;addTask(v,document.getElementById('new-tag').value,document.getElementById('new-hz').value);i.value='';i.focus();}
 function quickAddAaron(e){if(e.key!=='Enter')return;const i=document.getElementById('aaron-quick-inp'),v=i.value.trim();if(!v)return;addAT(v,document.getElementById('aaron-hz-sel').value);i.value='';i.focus();}
@@ -2083,12 +2111,14 @@ function metrics(){
   const allWaiting=Object.values(S.waitingOn).reduce((a,b)=>a+b.length,0);
   document.getElementById('m-open').textContent=allOpen;
   document.getElementById('m-done').textContent=S.completedMetrics?.total||0;
+  const cCompleted = document.getElementById('c-completed');
+  if(cCompleted) cCompleted.textContent = (S.completedMetrics?.total||0);
   document.getElementById('m-waiting').textContent=allWaiting;
   renderCapacityBreakdown();
 }
 
 // ── COMPLETED TASK TRACKING ──
-function trackCompletion(tag){
+function trackCompletion(tag, title){
   if(!S.completedMetrics) S.completedMetrics={total:0,by645:0,byFaye:0,byPersonal:0,byAaron:0,byOffice:0,log:[]};
   S.completedMetrics.total=(S.completedMetrics.total||0)+1;
   if(tag==='645')S.completedMetrics.by645=(S.completedMetrics.by645||0)+1;
@@ -2097,8 +2127,95 @@ function trackCompletion(tag){
   else if(tag==='aaron')S.completedMetrics.byAaron=(S.completedMetrics.byAaron||0)+1;
   else if(tag==='strategic')S.completedMetrics.byStrategic=(S.completedMetrics.byStrategic||0)+1;
   else if(tag==='office')S.completedMetrics.byOffice=(S.completedMetrics.byOffice||0)+1;
-  S.completedMetrics.log.push({tag,date:new Date().toISOString()});
+  S.completedMetrics.log.push({tag, title:title||'', date:new Date().toISOString()});
   save();
+}
+
+function renderCompleted(){
+  const el = document.getElementById('completed-list');
+  if(!el) return;
+
+  // Merge done tasks from all 3 sources
+  const doneTasks = [
+    ...(S.tasks||[]).filter(t=>t.done).map(t=>({...t, _type:'main'})),
+    ...(S.aaronTasks||[]).filter(t=>t.done).map(t=>({...t, _type:'aaron', tag:'aaron'})),
+    ...(S.fayeTasks||[]).filter(t=>t.done).map(t=>({...t, _type:'faye'}))
+  ];
+
+  // Also pull from completedMetrics log for any that were removed after completion
+  const log = (S.completedMetrics?.log||[]).slice().reverse(); // newest first
+
+  const tagColors = {
+    '645':'var(--amber)', aaron:'var(--amber)', faye:'var(--rose)',
+    personal:'var(--sage)', strategic:'var(--violet)', office:'var(--teal)'
+  };
+  const tagLabels = {
+    '645':'645 Ops', aaron:'Aaron', faye:'Faye', personal:'Personal',
+    strategic:'Strategic', office:'Office'
+  };
+
+  if(!doneTasks.length && !log.length){
+    el.innerHTML = `<div style="padding:24px 18px;font-family:'DM Mono',monospace;font-size:12px;color:var(--t3);text-align:center;">No completed tasks yet</div>`;
+    return;
+  }
+
+  // Group by date
+  const grouped = {};
+  doneTasks.forEach(t => {
+    const dateKey = t.completedAt ? new Date(t.completedAt).toDateString() : 'Unknown date';
+    if(!grouped[dateKey]) grouped[dateKey] = [];
+    grouped[dateKey].push({title: t.title, tag: t.tag, fromState: true});
+  });
+
+  // Add log entries that aren't already in doneTasks
+  const doneIds = new Set(doneTasks.map(t=>t.title));
+  log.forEach(entry => {
+    if(!entry.title || doneIds.has(entry.title)) return;
+    const dateKey = new Date(entry.date).toDateString();
+    if(!grouped[dateKey]) grouped[dateKey] = [];
+    grouped[dateKey].push({title: entry.title, tag: entry.tag});
+  });
+
+  // Sort date keys newest first
+  const sortedDates = Object.keys(grouped).sort((a,b) => {
+    if(a==='Unknown date') return 1;
+    if(b==='Unknown date') return -1;
+    return new Date(b) - new Date(a);
+  });
+
+  const today = new Date().toDateString();
+  const yesterday = new Date(Date.now()-86400000).toDateString();
+
+  let html = '';
+  sortedDates.forEach(dateKey => {
+    const label = dateKey === today ? 'Today' : dateKey === yesterday ? 'Yesterday' : dateKey;
+    const items = grouped[dateKey];
+    html += `<div style="padding:8px 18px 4px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);border-bottom:1px solid var(--b);">${label} · ${items.length} task${items.length!==1?'s':''}</div>`;
+    items.forEach(item => {
+      const color = tagColors[item.tag] || 'var(--t3)';
+      const label2 = tagLabels[item.tag] || item.tag || '—';
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:9px 18px;border-bottom:1px solid var(--b);opacity:.75;">
+        <span style="color:var(--sage);font-size:14px;flex-shrink:0;">✓</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-family:'Jost',sans-serif;font-size:14px;color:var(--t2);text-decoration:line-through;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.title}</div>
+        </div>
+        <span style="font-family:'DM Mono',monospace;font-size:9px;color:${color};background:${color.replace('var(','var(--').replace(')','-d)')};padding:2px 7px;border-radius:2px;flex-shrink:0;">${label2}</span>
+      </div>`;
+    });
+  });
+
+  // Metrics summary at top
+  const cm = S.completedMetrics || {};
+  const total = cm.total || doneTasks.length;
+  const summaryHtml = `<div style="display:flex;gap:0;border-bottom:2px solid var(--b);flex-shrink:0;">
+    ${[['Total',total,'var(--t)'],['645',cm.by645||0,'var(--amber)'],['Aaron',cm.byAaron||0,'var(--amber)'],['Faye',cm.byFaye||0,'var(--rose)'],['Strategic',cm.byStrategic||0,'var(--violet)']].map(([lbl,val,col])=>`
+    <div style="flex:1;padding:10px 4px;text-align:center;border-right:1px solid var(--b);">
+      <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:${col};">${val}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--t3);letter-spacing:.06em;">${lbl}</div>
+    </div>`).join('')}
+  </div>`;
+
+  el.innerHTML = summaryHtml + html;
 }
 
 function updateBadges(){
@@ -2315,6 +2432,7 @@ async function loadCalendars(){
     renderAaronCal(data.calendars.aaron || []);
     renderPersonalCal(data.calendars.personal || []);
     renderFayeCal(data.calendars.faye || []);
+    renderAllCal(data.calendars);
     setCalStatus('ok',`Synced · ${fmt12(new Date())}`);
     
   }catch(e){
@@ -2397,6 +2515,71 @@ function renderAaronCal(evts){
   el.innerHTML = htmlA || noCal();
   // Update the Now/Up Next strip with live data
   updateNowStrip(filteredA, 'aaron');
+}
+
+function renderAllCal(calendars){
+  const el = document.getElementById('all-cal');
+  const dot = document.getElementById('all-cal-dot');
+  if(dot) dot.className = 'cal-lbl-dot ok';
+  if(!el) return;
+
+  // Merge all 4 calendars with source labels and colors
+  const sources = [
+    { key: 'aaron',    label: "Aaron's",  color: 'cur',  evts: calendars.aaron    || [] },
+    { key: 'mine',     label: '645',       color: 'you',  evts: calendars.mine     || [] },
+    { key: 'personal', label: 'Personal',  color: 'mine', evts: calendars.personal || [] },
+    { key: 'faye',     label: 'Faye',      color: 'prep', evts: calendars.faye     || [] }
+  ];
+
+  // Flatten, tag with source, filter all-day
+  const now = new Date();
+  const todayStr = now.toDateString();
+  const tomorrowStr = new Date(now.getTime() + 86400000).toDateString();
+
+  const parseTime = s => {
+    try {
+      const [t, ap] = s.split(' ');
+      let [h, m] = t.split(':').map(Number);
+      if(ap === 'PM' && h !== 12) h += 12;
+      if(ap === 'AM' && h === 12) h = 0;
+      const d = new Date(now); d.setHours(h, m, 0, 0);
+      return d;
+    } catch(e){ return null; }
+  };
+
+  let allEvts = [];
+  sources.forEach(src => {
+    src.evts.filter(e => !e.isAllDay && e.start).forEach(e => {
+      allEvts.push({ ...e, _src: src.label, _color: src.color, _t: parseTime(e.start) });
+    });
+  });
+
+  // Sort by time
+  allEvts.sort((a, b) => (a._t || 0) - (b._t || 0));
+
+  if(!allEvts.length){ el.innerHTML = noCal(); return; }
+
+  let lastDay = '', html = '';
+  allEvts.forEach((ev, i) => {
+    const evDay = ev.date || todayStr;
+    if(evDay !== lastDay && evDay === tomorrowStr){
+      html += `<div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);padding:8px 0 4px;border-top:1px solid var(--b);margin-top:4px;">Tomorrow</div>`;
+      lastDay = evDay;
+    }
+    html += `<div class="cal-ev" style="animation-delay:${i*.03}s">
+      <div class="cal-time">${ev.start||'—'}</div>
+      <div class="cal-line ${ev._color}"></div>
+      <div class="cal-body">
+        <div class="cal-name">${ev.title}</div>
+        <div class="cal-sub" style="color:var(--t3);">${ev._src}${ev.location ? ' · ' + ev.location.split(',')[0] : ''}</div>
+      </div>
+    </div>`;
+  });
+
+  el.innerHTML = html || noCal();
+
+  // Update Now/Up Next strip with merged events
+  updateNowStrip(allEvts, 'all');
 }
 
 function renderPersonalCal(evts){
@@ -4345,17 +4528,16 @@ function mobileAddTask(){
 function switchCalView(which, btn){
   document.querySelectorAll('#cal-toggle-tabs .hz-tab').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
-  ['aaron','mine','personal','faye'].forEach(v => {
+  ['all','aaron','mine','personal','faye'].forEach(v => {
     const el = document.getElementById(`cal-view-${v}`);
     if(el) el.style.display = v === which ? 'flex' : 'none';
   });
-  // Update Now/Up Next strip color when switching calendars
   updateNowStrip(null, which);
 }
 
 // ── NOW / UP NEXT STRIP ──
 let _calEventsCache = [];
-let _nowStripCalType = 'aaron'; // track which calendar is active
+let _nowStripCalType = 'all'; // track which calendar is active
 function updateNowStrip(evts, calType){
   if(evts && evts.length) _calEventsCache = evts;
   if(calType) _nowStripCalType = calType;
@@ -4363,11 +4545,18 @@ function updateNowStrip(evts, calType){
   const text = document.getElementById('cal-now-text');
   if(!strip || !text) return;
 
-  // Color-coded background: amber for Aaron, blue for My Calendar
-  const isAaron = _nowStripCalType !== 'mine';
-  strip.style.background = isAaron ? 'rgba(200,72,0,.05)' : 'rgba(26,79,196,.05)';
-  strip.style.borderBottom = `1px solid ${isAaron ? 'rgba(200,72,0,.15)' : 'rgba(26,79,196,.15)'}`;
-  const accentColor = isAaron ? 'var(--amber)' : 'var(--blue)';
+  // Color-coded: neutral for All, amber for Aaron, blue for mine, green for personal, rose for faye
+  const calColors = {
+    all:      { bg: 'transparent', border: 'var(--b)', accent: 'var(--t2)' },
+    aaron:    { bg: 'rgba(200,72,0,.05)', border: 'rgba(200,72,0,.15)', accent: 'var(--amber)' },
+    mine:     { bg: 'rgba(26,79,196,.05)', border: 'rgba(26,79,196,.15)', accent: 'var(--blue)' },
+    personal: { bg: 'rgba(21,122,64,.05)', border: 'rgba(21,122,64,.15)', accent: 'var(--sage)' },
+    faye:     { bg: 'rgba(184,50,72,.05)', border: 'rgba(184,50,72,.15)', accent: 'var(--rose)' }
+  };
+  const calStyle = calColors[_nowStripCalType] || calColors.all;
+  strip.style.background = calStyle.bg;
+  strip.style.borderBottom = `1px solid ${calStyle.border}`;
+  const accentColor = calStyle.accent;
 
   const now = new Date();
   const filtered = _calEventsCache.filter(e => !e.isAllDay && e.start);
