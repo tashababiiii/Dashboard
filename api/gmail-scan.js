@@ -21,26 +21,55 @@ module.exports = async (req, res) => {
     oauth2Client.setCredentials(tokens);
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-    const listRes = await gmail.users.threads.list({
-      userId: 'me', q: 'newer_than:3d -from:noreply', maxResults: 20
-    });
+    // Two queries:
+    // 1. Emails directly to/from Natasha in last 3 days (catches Aaron forwards, replies, tasks)
+    // 2. Emails where she's CC'd from key people in last 3 days
+    const [directRes, ccRes] = await Promise.allSettled([
+      gmail.users.threads.list({
+        userId: 'me',
+        q: 'newer_than:3d -from:noreply -from:no-reply -from:notifications -from:mailer -category:promotions -category:social',
+        maxResults: 20
+      }),
+      gmail.users.threads.list({
+        userId: 'me',
+        q: `newer_than:3d (from:aholidayiii@645ventures.com OR from:natasha.holiday@rbccm.com OR from:nnamdi@645ventures.com OR from:lquirk@645ventures.com) -from:noreply`,
+        maxResults: 10
+      })
+    ]);
 
-    const threads = listRes.data.threads || [];
-    if (threads.length === 0) return res.status(200).json({ items: [] });
+    // Merge thread IDs, deduplicate
+    const seenIds = new Set();
+    const allThreads = [];
+    for (const result of [directRes, ccRes]) {
+      if (result.status === 'fulfilled') {
+        for (const t of (result.value.data.threads || [])) {
+          if (!seenIds.has(t.id)) {
+            seenIds.add(t.id);
+            allThreads.push(t);
+          }
+        }
+      }
+    }
 
+    if (allThreads.length === 0) return res.status(200).json({ items: [] });
+
+    // Fetch metadata for each thread — get FULL snippet and sender
     const summaries = await Promise.allSettled(
-      threads.slice(0, 15).map(async t => {
+      allThreads.slice(0, 20).map(async t => {
         const thread = await gmail.users.threads.get({
           userId: 'me', id: t.id, format: 'metadata',
-          metadataHeaders: ['Subject', 'From', 'Date']
+          metadataHeaders: ['Subject', 'From', 'To', 'Cc', 'Date']
         });
+        // Use latest message in thread
         const latest = thread.data.messages?.[thread.data.messages.length - 1];
         const headers = {};
         (latest?.payload?.headers || []).forEach(h => { headers[h.name] = h.value; });
         return {
           subject: (headers['Subject'] || '(no subject)').slice(0, 200),
           from: (headers['From'] || 'unknown').slice(0, 100),
-          snippet: (latest?.snippet || '').slice(0, 150)
+          to: (headers['To'] || '').slice(0, 150),
+          cc: (headers['Cc'] || '').slice(0, 150),
+          snippet: (latest?.snippet || '').slice(0, 200)
         };
       })
     );
@@ -54,12 +83,19 @@ module.exports = async (req, res) => {
       max_tokens: 1500,
       messages: [{
         role: 'user',
-        content: `Triage these emails for Natasha Bradley, EA & Office Manager at 645 Ventures NYC. Identify only emails that need action or follow-up. Exclude newsletters, automated notifications, and marketing.
+        content: `Triage these emails for Natasha Bradley, EA & Office Manager at 645 Ventures NYC. She manages Aaron Holiday (Managing Partner). Flag anything that needs her action — including:
+- Direct requests from Aaron (even if forwarded)
+- Scheduling requests she's been CC'd on to coordinate
+- Payment or invoice requests
+- Time-sensitive items or things past due
+- Anything where she needs to follow up or reply
 
-${validEmails.map((e, i) => `${i+1}. From: ${e.from}\nSubject: ${e.subject}\nSnippet: ${e.snippet}`).join('\n\n')}
+Do NOT flag newsletters, automated system emails, or mass CC blasts with no action needed.
+
+${validEmails.map((e, i) => `${i+1}. From: ${e.from}\nTo: ${e.to}\nCC: ${e.cc}\nSubject: ${e.subject}\nSnippet: ${e.snippet}`).join('\n\n')}
 
 Return ONLY a valid JSON array of actionable items:
-[{"title":"short action description","reason":"why this needs attention","subject":"email subject","from":"sender"}]
+[{"title":"short action description under 8 words","reason":"exactly what needs to happen","subject":"email subject","from":"sender name/email"}]
 
 If nothing needs action, return [].`
       }]
