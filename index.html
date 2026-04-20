@@ -2650,13 +2650,24 @@ ${rawText.slice(0, 6000)}`
 
     const priColors = { high: 'var(--rose)', med: 'var(--gold)', low: 'var(--sage)' };
     taskList.innerHTML = tasks.map((t, i) => `
-      <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--s3);border:1px solid var(--bm);border-radius:3px;cursor:pointer;transition:all .15s;" onclick="addCapturedFileTask(${i})" id="cft-${i}" onmouseover="this.style.borderColor='var(--gold)';this.style.background='var(--gold-d)'" onmouseout="this.style.borderColor='var(--bm)';this.style.background='var(--s3)'">
-        <div style="width:6px;height:6px;border-radius:50%;background:${priColors[t.priority] || 'var(--t3)'};flex-shrink:0;"></div>
-        <div style="flex:1;font-size:12px;color:var(--t);line-height:1.4;">${t.task}</div>
-        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--t3);flex-shrink:0;">+ add</div>
+      <div id="cft-${i}" style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;background:var(--s3);border:1px solid var(--bm);border-radius:3px;">
+        <div style="width:6px;height:6px;border-radius:50%;background:${priColors[t.priority] || 'var(--t3)'};flex-shrink:0;margin-top:4px;"></div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;color:var(--t);line-height:1.4;margin-bottom:4px;">${t.task}</div>
+          <select id="cft-cat-${i}" style="font-family:'DM Mono',monospace;font-size:10px;background:var(--s2);border:1px solid var(--bm);border-radius:2px;padding:2px 4px;color:var(--t2);outline:none;cursor:pointer;" onclick="event.stopPropagation()"><option value='645'>Office &amp; Events</option><option value='aaron'>Ops Support</option><option value='strategic'>Strategic</option><option value='faye'>Faye Clients</option><option value='personal'>Personal</option></select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
+          <button onclick="addCapturedFileTask(${i})" style="background:var(--t);color:var(--bg);border:none;border-radius:2px;padding:3px 8px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;white-space:nowrap;">+ add</button>
+          <button onclick="dismissFileTask(${i})" style="background:none;border:1px solid var(--bm);border-radius:2px;padding:3px 8px;font-family:'DM Mono',monospace;font-size:9px;color:var(--t3);cursor:pointer;">✕</button>
+        </div>
       </div>`).join('');
 
     window._capturedFileTasks = tasks;
+    // Pre-select Claude's workspace guess in each category dropdown
+    tasks.forEach((t, i) => {
+      const sel = document.getElementById(`cft-cat-${i}`);
+      if (sel && t.workspace) sel.value = t.workspace;
+    });
     results.style.display = 'block';
 
   } catch(e) {
@@ -2671,10 +2682,12 @@ function addCapturedFileTask(i) {
   const t = tasks[i];
   if (!t) return;
 
-  const tag = document.getElementById('cap-tag')?.value || t.workspace || '645';
-  if (tag === 'faye')                  addFT(t.task, 'doherty', 'today', t.priority || 'med', 'From file');
+  // Read category from the inline dropdown on the card, fall back to Claude's guess
+  const catSel = document.getElementById(`cft-cat-${i}`);
+  const tag = catSel?.value || t.workspace || '645';
+  if (tag === 'faye')                          addFT(t.task, 'doherty', 'today', t.priority || 'med', 'From file');
   else if (tag === 'aaron' || tag === 'strategic') addAT(t.task, 'today', t.priority || 'med', 'From file');
-  else                                 addTask(t.task, tag, 'today', t.priority || 'med', 'From file');
+  else                                         addTask(t.task, tag, 'today', t.priority || 'med', 'From file');
 
   const el = document.getElementById(`cft-${i}`);
   if (el) {
@@ -2754,13 +2767,24 @@ ${text.slice(0, 6000)}`
 
     const priColors = { high: 'var(--rose)', med: 'var(--gold)', low: 'var(--sage)' };
     taskList.innerHTML = tasks.map((t, i) => `
-      <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--s3);border:1px solid var(--bm);border-radius:3px;cursor:pointer;transition:all .15s;" onclick="addCapturedFileTask(${i})" id="cft-${i}" onmouseover="this.style.borderColor='var(--gold)';this.style.background='var(--gold-d)'" onmouseout="this.style.borderColor='var(--bm)';this.style.background='var(--s3)'">
-        <div style="width:6px;height:6px;border-radius:50%;background:${priColors[t.priority] || 'var(--t3)'};flex-shrink:0;"></div>
-        <div style="flex:1;font-size:12px;color:var(--t);line-height:1.4;">${t.task}</div>
-        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--t3);flex-shrink:0;">+ add</div>
+      <div id="cft-${i}" style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;background:var(--s3);border:1px solid var(--bm);border-radius:3px;">
+        <div style="width:6px;height:6px;border-radius:50%;background:${priColors[t.priority] || 'var(--t3)'};flex-shrink:0;margin-top:4px;"></div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;color:var(--t);line-height:1.4;margin-bottom:4px;">${t.task}</div>
+          <select id="cft-cat-${i}" style="font-family:'DM Mono',monospace;font-size:10px;background:var(--s2);border:1px solid var(--bm);border-radius:2px;padding:2px 4px;color:var(--t2);outline:none;cursor:pointer;" onclick="event.stopPropagation()"><option value='645'>Office &amp; Events</option><option value='aaron'>Ops Support</option><option value='strategic'>Strategic</option><option value='faye'>Faye Clients</option><option value='personal'>Personal</option></select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
+          <button onclick="addCapturedFileTask(${i})" style="background:var(--t);color:var(--bg);border:none;border-radius:2px;padding:3px 8px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;white-space:nowrap;">+ add</button>
+          <button onclick="dismissFileTask(${i})" style="background:none;border:1px solid var(--bm);border-radius:2px;padding:3px 8px;font-family:'DM Mono',monospace;font-size:9px;color:var(--t3);cursor:pointer;">✕</button>
+        </div>
       </div>`).join('');
 
     window._capturedFileTasks = tasks;
+    // Pre-select Claude's workspace guess in each category dropdown
+    tasks.forEach((t, i) => {
+      const sel = document.getElementById(`cft-cat-${i}`);
+      if (sel && t.workspace) sel.value = t.workspace;
+    });
     results.style.display = 'block';
     if (inp) inp.value = '';
 
@@ -2828,6 +2852,79 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+
+
+// ── DISMISS FUNCTIONS ──
+
+function dismissSlackItem(i) {
+  const el = document.getElementById(`sk-${i}`);
+  if (el) el.style.display = 'none';
+  slackFoundTasks.splice(i, 1);
+  if (slackFoundTasks.length === 0) {
+    document.getElementById('slack-scan-results').style.display = 'none';
+    const empty = document.getElementById('slack-scan-empty');
+    empty.style.display = 'block';
+    empty.style.color = 'var(--t3)';
+    empty.textContent = 'No new tasks found in the last 24 hours.';
+  }
+}
+
+function dismissFileTask(i) {
+  const el = document.getElementById(`cft-${i}`);
+  if (el) el.style.display = 'none';
+  const tasks = window._capturedFileTasks || [];
+  tasks.splice(i, 1);
+  // If all dismissed, hide the results panel
+  const remaining = document.querySelectorAll('[id^="cft-"]:not([style*="display: none"])');
+  if (remaining.length === 0) {
+    document.getElementById('file-capture-results').style.display = 'none';
+  }
+}
+
+function dismissAgentItem(i) {
+  _agentItems.splice(i, 1);
+  renderAgentQueue();
+  // Update badge
+  const badge = document.getElementById('tb-agent');
+  if (badge) badge.textContent = _agentItems.length;
+  if (_agentItems.length === 0) {
+    document.getElementById('agent-queue-list').innerHTML = '';
+    document.getElementById('agent-execute-wrap').style.display = 'none';
+    document.getElementById('agent-empty').style.display = 'block';
+  }
+}
+
+function dismissEmailTask(i, type) {
+  const el = document.getElementById(type === 'task' ? `et-${i}` : `ew-${i}`);
+  if (el) el.style.display = 'none';
+  if (type === 'task') {
+    emailFoundTasks.splice(i, 1);
+    // Hide checkbox from add logic so indices stay clean
+    document.querySelectorAll('#email-tasks-list [data-idx]').forEach(el => {
+      const idx = parseInt(el.dataset.idx);
+      if (idx === i) el.closest('div[id]')?.style && (el.closest('div[id]').style.display = 'none');
+    });
+  } else {
+    emailFoundWaiting.splice(i, 1);
+  }
+}
+
+function dismissSyncItem(i) {
+  const el = document.getElementById(`ss-${i}`);
+  if (el) el.style.display = 'none';
+  _smartSyncItems.splice(i, 1);
+  // Update status count
+  const visible = _smartSyncItems.length;
+  const status = document.getElementById('smart-sync-status');
+  const timeStr = new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  if (status) status.textContent = visible > 0 ? `${visible} item${visible>1?'s':''} · ${timeStr}` : `Synced ${timeStr} · nothing new`;
+  if (visible === 0) {
+    document.getElementById('smart-sync-results').style.display = 'none';
+    document.getElementById('smart-sync-empty').style.display = 'block';
+    const applyBtn = document.getElementById('sync-apply-btn');
+    if (applyBtn) applyBtn.style.display = 'none';
+  }
+}
 
 // ── QUICK CAPTURE ──
 async function parseCap(){
@@ -3152,13 +3249,14 @@ async function runSlackScan() {
 
     if (slackFoundTasks.length > 0) {
       list.innerHTML = slackFoundTasks.map((t, i) => `
-        <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;background:var(--s3);border-radius:3px;cursor:pointer;">
-          <input type="checkbox" data-idx="${i}" checked style="margin-top:2px;accent-color:#4a90d9;flex-shrink:0;" />
+        <div id="sk-${i}" style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;background:var(--s3);border-radius:3px;">
+          <input type="checkbox" data-idx="${i}" checked style="margin-top:2px;accent-color:#4a90d9;flex-shrink:0;cursor:pointer;" />
           <div style="flex:1;min-width:0;">
             <div style="font-size:13px;color:var(--t);margin-bottom:2px;">${t.task}</div>
             <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--t3);">From: ${t.from}${t.channel ? ' · ' + t.channel : ''} · <span style="color:${t.priority==='high'?'var(--rose)':t.priority==='med'?'var(--gold)':'var(--sage)'}">${t.priority}</span></div>
           </div>
-        </label>`).join('');
+          <button onclick="dismissSlackItem(${i})" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:13px;padding:0 2px;flex-shrink:0;opacity:.6;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6" title="Dismiss">✕</button>
+        </div>`).join('');
       results.style.display = 'block';
     } else {
       empty.style.display = 'block';
@@ -3256,13 +3354,14 @@ async function runEmailScan() {
     if (emailFoundTasks.length > 0) {
       tasksWrap.style.display = 'block';
       tasksList.innerHTML = emailFoundTasks.map((t, i) => `
-        <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;background:var(--s3);border-radius:3px;cursor:pointer;">
-          <input type="checkbox" data-idx="${i}" data-type="task" checked style="margin-top:2px;accent-color:var(--rose);flex-shrink:0;" />
+        <div id="et-${i}" style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;background:var(--s3);border-radius:3px;">
+          <input type="checkbox" data-idx="${i}" data-type="task" checked style="margin-top:2px;accent-color:var(--rose);flex-shrink:0;cursor:pointer;" />
           <div style="flex:1;min-width:0;">
             <div style="font-size:13px;color:var(--t);margin-bottom:2px;">${t.action}</div>
             <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--t3);">From: ${t.from} · ${t.subject} · <span style="color:${t.priority==='high'?'var(--rose)':t.priority==='med'?'var(--gold)':'var(--sage)'}">${t.priority}</span></div>
           </div>
-        </label>`).join('');
+          <button onclick="dismissEmailTask(${i},'task')" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:13px;padding:0 2px;flex-shrink:0;opacity:.6;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6" title="Dismiss">✕</button>
+        </div>`).join('');
     }
 
     const waitingWrap = document.getElementById('email-waiting-wrap');
@@ -3270,13 +3369,14 @@ async function runEmailScan() {
     if (emailFoundWaiting.length > 0) {
       waitingWrap.style.display = 'block';
       waitingList.innerHTML = emailFoundWaiting.map((w, i) => `
-        <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;background:var(--s3);border-radius:3px;cursor:pointer;">
-          <input type="checkbox" data-idx="${i}" data-type="waiting" checked style="margin-top:2px;accent-color:var(--gold);flex-shrink:0;" />
+        <div id="ew-${i}" style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;background:var(--s3);border-radius:3px;">
+          <input type="checkbox" data-idx="${i}" data-type="waiting" checked style="margin-top:2px;accent-color:var(--gold);flex-shrink:0;cursor:pointer;" />
           <div style="flex:1;min-width:0;">
             <div style="font-size:13px;color:var(--t);margin-bottom:2px;">${w.waiting_for}</div>
             <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--t3);">From: ${w.from} · ${w.subject}</div>
           </div>
-        </label>`).join('');
+          <button onclick="dismissEmailTask(${i},'waiting')" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:13px;padding:0 2px;flex-shrink:0;opacity:.6;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6" title="Dismiss">✕</button>
+        </div>`).join('');
     }
 
     const fyiWrap = document.getElementById('email-fyi-wrap');
@@ -3692,13 +3792,14 @@ async function runSmartSync(){
     status.textContent = `${found.length} item${found.length>1?'s':''} · ${timeStr}`;
 
     results.innerHTML = found.map((item,i)=>`
-      <label style="display:flex;align-items:flex-start;gap:8px;padding:7px 9px;background:var(--s2);border-radius:3px;border:1px solid var(--b);cursor:pointer;margin-bottom:3px;">
-        <input type="checkbox" data-idx="${i}" checked style="margin-top:2px;accent-color:var(--sage);flex-shrink:0;" />
+      <div id="ss-${i}" style="display:flex;align-items:flex-start;gap:8px;padding:7px 9px;background:var(--s2);border-radius:3px;border:1px solid var(--b);margin-bottom:3px;">
+        <input type="checkbox" data-idx="${i}" checked style="margin-top:2px;accent-color:var(--sage);flex-shrink:0;cursor:pointer;" />
         <div style="flex:1;min-width:0;">
           <div style="font-size:11px;color:var(--t);margin-bottom:2px;font-family:'Jost',sans-serif;">${item.title||item.subject||'Item'}</div>
           <div style="font-size:9px;color:var(--t3);font-family:'DM Mono',monospace;">${item._source==='email'?'✉':'💬'} ${item.reason||item.summary||''}</div>
         </div>
-      </label>`).join('');
+        <button onclick="dismissSyncItem(${i})" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:12px;padding:0 2px;flex-shrink:0;opacity:.6;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6" title="Dismiss">✕</button>
+      </div>`).join('');
 
     results.style.display = 'block';
 
@@ -3964,7 +4065,7 @@ function renderAgentQueue(){
       editFields = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;"><div><div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">Person</div><input id="aq-person-${i}" value="${(d.person||'').replace(/"/g,'&quot;')}" style="width:100%;background:var(--s3);border:1px solid var(--bm);border-radius:2px;padding:6px 8px;font-family:'Jost',sans-serif;font-size:12px;color:var(--t);outline:none;box-sizing:border-box;" /></div><div><div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">Due date</div><input id="aq-deldue-${i}" type="date" value="${d.due||''}" style="width:100%;background:var(--s3);border:1px solid var(--bm);border-radius:2px;padding:6px 8px;font-family:'DM Mono',monospace;font-size:11px;color:var(--t);outline:none;box-sizing:border-box;" /></div></div><div><div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">What was delegated</div><input id="aq-what-${i}" value="${(d.what||item.title).replace(/"/g,'&quot;')}" style="width:100%;background:var(--s3);border:1px solid var(--bm);border-radius:2px;padding:6px 8px;font-family:'Jost',sans-serif;font-size:12px;color:var(--t);outline:none;box-sizing:border-box;" /></div>`;
     }
 
-    return `<div id="aq-item-${i}" style="background:var(--s2);border:1px solid var(--bm);border-radius:4px;overflow:hidden;transition:border-color .15s;"><div style="padding:14px 18px;display:flex;align-items:flex-start;gap:12px;"><input type="checkbox" id="aq-cb-${i}" checked style="margin-top:3px;accent-color:var(--violet);flex-shrink:0;width:15px;height:15px;cursor:pointer;" /><div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;"><div style="font-family:'DM Mono',monospace;font-size:10px;padding:3px 8px;border-radius:2px;background:${tool.color}18;color:${tool.color};border:1px solid ${tool.color}30;">${tool.icon} ${tool.label}</div><div style="font-family:'DM Mono',monospace;font-size:10px;color:${priColors[item.priority]||'var(--t3)'};">${item.priority}</div><div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);">${tagOptions[item.workspace]||item.workspace||''}</div></div><div style="font-size:14px;font-weight:500;color:var(--t);margin-bottom:3px;">${item.title}</div><div style="font-size:12px;color:var(--t2);line-height:1.5;">${item.description}</div></div><div style="display:flex;align-items:center;gap:6px;flex-shrink:0;"><button onclick="toggleAgentEdit(${i})" id="aq-edit-btn-${i}" style="background:none;border:1px solid var(--bm);border-radius:2px;padding:4px 9px;font-family:'DM Mono',monospace;font-size:10px;color:var(--t2);cursor:pointer;white-space:nowrap;">✎ Edit</button><div id="aq-status-${i}" style="font-size:18px;display:none;"></div></div></div><div id="aq-edit-${i}" style="display:none;padding:0 18px 14px;border-top:1px solid var(--bm);background:var(--s3);"><div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--violet);letter-spacing:.1em;text-transform:uppercase;padding:10px 0 10px;margin-bottom:6px;">Edit before executing</div>${editFields}<button onclick="saveAgentEdit(${i})" style="margin-top:10px;background:var(--violet);border:none;border-radius:2px;padding:7px 14px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#fff;cursor:pointer;">Save edits →</button></div></div>`;
+    return `<div id="aq-item-${i}" style="background:var(--s2);border:1px solid var(--bm);border-radius:4px;overflow:hidden;transition:border-color .15s;"><div style="padding:14px 18px;display:flex;align-items:flex-start;gap:12px;"><input type="checkbox" id="aq-cb-${i}" checked style="margin-top:3px;accent-color:var(--violet);flex-shrink:0;width:15px;height:15px;cursor:pointer;" /><div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;"><div style="font-family:'DM Mono',monospace;font-size:10px;padding:3px 8px;border-radius:2px;background:${tool.color}18;color:${tool.color};border:1px solid ${tool.color}30;">${tool.icon} ${tool.label}</div><div style="font-family:'DM Mono',monospace;font-size:10px;color:${priColors[item.priority]||'var(--t3)'};">${item.priority}</div><div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);">${tagOptions[item.workspace]||item.workspace||''}</div></div><div style="font-size:14px;font-weight:500;color:var(--t);margin-bottom:3px;">${item.title}</div><div style="font-size:12px;color:var(--t2);line-height:1.5;">${item.description}</div></div><div style="display:flex;align-items:center;gap:6px;flex-shrink:0;"><button onclick="toggleAgentEdit(${i})" id="aq-edit-btn-${i}" style="background:none;border:1px solid var(--bm);border-radius:2px;padding:4px 9px;font-family:'DM Mono',monospace;font-size:10px;color:var(--t2);cursor:pointer;white-space:nowrap;">✎ Edit</button><button onclick="dismissAgentItem(${i})" style="background:none;border:1px solid var(--bm);border-radius:2px;padding:4px 7px;font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);cursor:pointer;" title="Dismiss">✕</button><div id="aq-status-${i}" style="font-size:18px;display:none;"></div></div></div><div id="aq-edit-${i}" style="display:none;padding:0 18px 14px;border-top:1px solid var(--bm);background:var(--s3);"><div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--violet);letter-spacing:.1em;text-transform:uppercase;padding:10px 0 10px;margin-bottom:6px;">Edit before executing</div>${editFields}<button onclick="saveAgentEdit(${i})" style="margin-top:10px;background:var(--violet);border:none;border-radius:2px;padding:7px 14px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#fff;cursor:pointer;">Save edits →</button></div></div>`;
   }).join('');
 
   // Wire up Slack recipient custom input toggles
