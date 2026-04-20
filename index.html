@@ -1680,6 +1680,40 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 </div>
 
 <script>
+// ── AUTH GATE — runs before anything else ───────────────────────────────────
+// Checks the session cookie against the server. If not authenticated,
+// blanks the page and redirects to Google login immediately.
+(async function authGate(){
+  // Show a minimal loading state so the page doesn't flash
+  document.documentElement.style.visibility = 'hidden';
+  try {
+    const r = await fetch('/api/auth?action=check');
+    const data = await r.json();
+    if(!data.authed){
+      // Not authenticated — redirect to Google OAuth login
+      document.documentElement.style.visibility = 'visible';
+      document.body.innerHTML = `
+        <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#FAF8F5;font-family:'DM Mono',monospace;">
+          <div style="text-align:center;padding:48px 32px;max-width:360px;">
+            <div style="font-size:32px;margin-bottom:16px;">✦</div>
+            <div style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:500;color:#2C1654;margin-bottom:8px;">Natasha's Command Center</div>
+            <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#8888A4;margin-bottom:32px;">645 Ventures · Private Dashboard</div>
+            <a href="/api/auth?action=login" style="display:inline-block;background:#2C1654;color:#fff;text-decoration:none;padding:12px 28px;border-radius:4px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;">Sign in with Google →</a>
+            <div style="font-size:9px;color:#8888A4;margin-top:20px;letter-spacing:.06em;">Access restricted to authorised users only</div>
+          </div>
+        </div>`;
+      return;
+    }
+    // Authenticated — reveal the page and continue loading
+    document.documentElement.style.visibility = 'visible';
+  } catch(e) {
+    // If the check fails (network error etc), still show the page
+    // The individual API calls will handle auth themselves
+    document.documentElement.style.visibility = 'visible';
+  }
+})();
+// ────────────────────────────────────────────────────────────────────────────
+
 // ── API ──
 const MY_CAL='nbradley@645ventures.com', AARON_CAL='aholidayiii@645ventures.com';
 
@@ -2723,7 +2757,7 @@ async function loadCalendars(){
         const connectHTML = `
           <div style="display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:8px 0;">
             <div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--t3);">Calendar not connected</div>
-            <a href="/api/auth/login" style="background:var(--gold);color:#fff;border:none;border-radius:3px;padding:7px 14px;font-family:'DM Mono',monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;text-decoration:none;display:inline-block;">Connect Google Calendar →</a>
+            <a href="/api/auth?action=login" style="background:var(--gold);color:#fff;border:none;border-radius:3px;padding:7px 14px;font-family:'DM Mono',monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;text-decoration:none;display:inline-block;">Connect Google Calendar →</a>
           </div>`;
         document.getElementById('my-cal').innerHTML = connectHTML;
         document.getElementById('aaron-cal').innerHTML = `<div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--t3);">Connect calendar above</div>`;
@@ -2745,7 +2779,7 @@ async function loadCalendars(){
     
   }catch(e){
     setCalStatus('err','Calendar load failed');
-    document.getElementById('my-cal').innerHTML=`<div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--rose);">Load failed — <a href="/api/auth/login" style="color:var(--gold);">reconnect</a></div>`;
+    document.getElementById('my-cal').innerHTML=`<div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--rose);">Load failed — <a href="/api/auth?action=login" style="color:var(--gold);">reconnect</a></div>`;
     document.getElementById('aaron-cal').innerHTML=`<div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--rose);">Load failed</div>`;
     document.getElementById('my-cal-dot').className='cal-lbl-dot';
     document.getElementById('aaron-cal-dot').className='cal-lbl-dot';
