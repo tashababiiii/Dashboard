@@ -2774,6 +2774,14 @@ function render(){
     const faye = (S.fayeTasks||[]).filter(t=>!t.done&&t.hz===S.hz)
       .map(t=>({...t, tag:'faye', _type:'faye'}));
     tasks = [...main,...aaron,...faye].sort((a,b)=>(pOrd[a.priority]??1)-(pOrd[b.priority]??1));
+  } else if(S.ws === 'aaron'){
+    // Aaron tab: show S.aaronTasks (the Aaron queue) + any S.tasks tagged 'aaron'
+    const mainAaron = S.tasks.filter(t=>!t.done&&t.hz===S.hz&&t.tag==='aaron').map(t=>({...t,_type:'main'}));
+    const aaronQ = (S.aaronTasks||[]).filter(t=>!t.done&&t.hz===S.hz).map(t=>({...t,tag:'aaron',_type:'aaron'}));
+    tasks = [...mainAaron,...aaronQ].sort((a,b)=>(pOrd[a.priority]??1)-(pOrd[b.priority]??1));
+  } else if(S.ws === 'strategic'){
+    // Strategic tab: show S.tasks tagged 'strategic'
+    tasks = S.tasks.filter(t=>!t.done&&t.hz===S.hz&&t.tag==='strategic').sort((a,b)=>(pOrd[a.priority]??1)-(pOrd[b.priority]??1));
   } else {
     tasks = S.tasks.filter(t=>!t.done&&t.hz===S.hz&&t.tag===S.ws).sort((a,b)=>(pOrd[a.priority]??1)-(pOrd[b.priority]??1));
   }
@@ -2789,7 +2797,28 @@ function render(){
         <button onclick="event.stopPropagation();deleteTaskUnified(${t.id},'${t._type||'main'}')" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px;border-radius:2px;transition:color .15s;" onmouseover="this.style.color='var(--rose)'" onmouseout="this.style.color='var(--t3)'">✕</button>
       </div>
     </div>`).join(''):'<div class="empty-msg">Nothing here yet.</div>';
-  ['today','week','month','someday'].forEach(hz=>{const el=document.getElementById(`c-${hz}`);if(el)el.textContent=S.tasks.filter(t=>t.hz===hz&&!t.done&&(S.ws==='all'||t.tag===S.ws)).length;});
+  ['today','week','month','someday'].forEach(hz=>{
+    const el=document.getElementById(`c-${hz}`);
+    if(!el) return;
+    let count = 0;
+    if(S.ws === 'all'){
+      // All tab: count everything across all task arrays
+      count = S.tasks.filter(t=>t.hz===hz&&!t.done).length
+            + (S.aaronTasks||[]).filter(t=>t.hz===hz&&!t.done).length
+            + (S.fayeTasks||[]).filter(t=>t.hz===hz&&!t.done).length;
+    } else if(S.ws === 'aaron'){
+      // Aaron tab: S.aaronTasks + S.tasks tagged 'aaron'
+      count = (S.aaronTasks||[]).filter(t=>t.hz===hz&&!t.done).length
+            + S.tasks.filter(t=>t.hz===hz&&!t.done&&t.tag==='aaron').length;
+    } else if(S.ws === 'faye'){
+      // Faye tab: S.fayeTasks only
+      count = (S.fayeTasks||[]).filter(t=>t.hz===hz&&!t.done).length;
+    } else {
+      // 645, strategic, personal, office — filter S.tasks by tag
+      count = S.tasks.filter(t=>t.hz===hz&&!t.done&&t.tag===S.ws).length;
+    }
+    el.textContent = count;
+  });
   const metaEl = document.getElementById('my-meta'); if(metaEl) metaEl.textContent=`${S.tasks.filter(t=>!t.done).length} open`;
   metrics();
 }
@@ -4726,9 +4755,11 @@ function saveTaskDrawer(){
   const saveBtn = document.querySelector('.td-save-btn');
   if(saveBtn){ saveBtn.textContent = '✓ Saved!'; saveBtn.style.background = 'var(--sage)'; }
   setTimeout(() => {
-    if(type==='main') render();
-    else if(type==='faye') renderFaye();
-    else if(type==='aaron') renderAaron();
+    // Always call render() so unified My Priorities list updates
+    // Also call the specific renderer so that section updates too
+    render();
+    if(type==='faye') renderFaye();
+    if(type==='aaron') renderAaron();
     updateBadges();
     closeTaskDrawer();
   }, 600);
