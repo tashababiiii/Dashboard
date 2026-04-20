@@ -571,6 +571,10 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
     z-index: 50;
     overflow-y: auto;
     flex-direction: column;
+    display: none;
+  }
+  #mob-cal-view.active, #mob-tools-view.active {
+    display: flex !important;
   }
 
   /* Stats row — smaller */
@@ -702,6 +706,8 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 .mobile-bottom-nav { display: none; }
 .mobile-fab-morning { display: none; }
 .mobile-fab-add { display: none; }
+#mob-cal-view { display: none; }
+#mob-tools-view { display: none; }
 
 
 /* Agent queue loading spinner */
