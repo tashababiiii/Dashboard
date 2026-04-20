@@ -894,10 +894,12 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
             <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:500;color:var(--t);">Today's Schedule</div>
           </div>
 
-          <!-- Calendar toggle: Aaron / My Calendar -->
-          <div style="display:flex;border-bottom:1px solid var(--b);flex-shrink:0;" id="cal-toggle-tabs">
-            <button class="hz-tab active" style="font-size:11px;border-right:1px solid var(--b);" onclick="switchCalView('aaron',this)">Aaron's Calendar</button>
-            <button class="hz-tab" style="font-size:11px;" onclick="switchCalView('mine',this)">My Calendar</button>
+          <!-- Calendar toggle: Aaron / My Calendar / Personal / Faye -->
+          <div style="display:flex;border-bottom:1px solid var(--b);flex-shrink:0;overflow-x:auto;" id="cal-toggle-tabs">
+            <button class="hz-tab active" style="font-size:11px;border-right:1px solid var(--b);white-space:nowrap;" onclick="switchCalView('aaron',this)">Aaron</button>
+            <button class="hz-tab" style="font-size:11px;border-right:1px solid var(--b);white-space:nowrap;" onclick="switchCalView('mine',this)">645</button>
+            <button class="hz-tab" style="font-size:11px;border-right:1px solid var(--b);white-space:nowrap;" onclick="switchCalView('personal',this)">Personal</button>
+            <button class="hz-tab" style="font-size:11px;white-space:nowrap;" onclick="switchCalView('faye',this)">Faye</button>
           </div>
 
           <!-- Aaron calendar view -->
@@ -920,6 +922,28 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
             </div>
             <div class="cal-sec" style="flex:1;overflow-y:auto;">
               <div id="my-cal-mini"><div class="cal-skel" style="width:100%"></div><div class="cal-skel" style="width:70%"></div></div>
+            </div>
+          </div>
+
+          <!-- Personal calendar view (hidden by default) -->
+          <div id="cal-view-personal" style="flex:1;display:none;flex-direction:column;overflow:hidden;">
+            <div style="padding:6px 14px;border-bottom:1px solid rgba(21,122,64,.12);display:flex;align-items:center;gap:8px;flex-shrink:0;min-height:30px;background:rgba(21,122,64,.04);">
+              <div class="cal-lbl-dot" id="personal-cal-dot" style="flex-shrink:0;"></div>
+              <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);letter-spacing:.04em;">Personal Calendar</div>
+            </div>
+            <div class="cal-sec" style="flex:1;overflow-y:auto;">
+              <div id="personal-cal"><div class="cal-skel" style="width:100%"></div><div class="cal-skel" style="width:70%"></div></div>
+            </div>
+          </div>
+
+          <!-- Faye calendar view (hidden by default) -->
+          <div id="cal-view-faye" style="flex:1;display:none;flex-direction:column;overflow:hidden;">
+            <div style="padding:6px 14px;border-bottom:1px solid rgba(184,50,72,.12);display:flex;align-items:center;gap:8px;flex-shrink:0;min-height:30px;background:rgba(184,50,72,.04);">
+              <div class="cal-lbl-dot" id="faye-cal-dot" style="flex-shrink:0;"></div>
+              <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);letter-spacing:.04em;">Faye Calendar</div>
+            </div>
+            <div class="cal-sec" style="flex:1;overflow-y:auto;">
+              <div id="faye-cal"><div class="cal-skel" style="width:100%"></div><div class="cal-skel" style="width:70%"></div></div>
             </div>
           </div>
 
@@ -2289,6 +2313,8 @@ async function loadCalendars(){
     
     renderMyCal(data.calendars.mine || []);
     renderAaronCal(data.calendars.aaron || []);
+    renderPersonalCal(data.calendars.personal || []);
+    renderFayeCal(data.calendars.faye || []);
     setCalStatus('ok',`Synced · ${fmt12(new Date())}`);
     
   }catch(e){
@@ -2371,6 +2397,58 @@ function renderAaronCal(evts){
   el.innerHTML = htmlA || noCal();
   // Update the Now/Up Next strip with live data
   updateNowStrip(filteredA, 'aaron');
+}
+
+function renderPersonalCal(evts){
+  const el = document.getElementById('personal-cal');
+  const dot = document.getElementById('personal-cal-dot');
+  if(dot) dot.className = 'cal-lbl-dot ok';
+  if(!el) return;
+  if(!evts || !evts.length){ el.innerHTML = noCal(); return; }
+  const now = new Date();
+  const todayStr = now.toDateString();
+  const tomorrowStr = new Date(now.getTime() + 86400000).toDateString();
+  const filtered = evts.filter(e => !e.isAllDay);
+  let lastDay = '', html = '';
+  filtered.forEach((ev, i) => {
+    const evDay = ev.date || todayStr;
+    if(evDay !== lastDay && evDay === tomorrowStr){
+      html += `<div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);padding:8px 0 4px;border-top:1px solid var(--b);margin-top:4px;">Tomorrow</div>`;
+      lastDay = evDay;
+    }
+    html += `<div class="cal-ev" style="animation-delay:${i*.05}s">
+      <div class="cal-time">${ev.start||'—'}</div>
+      <div class="cal-line mine"></div>
+      <div class="cal-body"><div class="cal-name">${ev.title}</div>${ev.location?`<div class="cal-sub">${ev.location.split(',')[0]}</div>`:''}</div>
+    </div>`;
+  });
+  el.innerHTML = html || noCal();
+}
+
+function renderFayeCal(evts){
+  const el = document.getElementById('faye-cal');
+  const dot = document.getElementById('faye-cal-dot');
+  if(dot) dot.className = 'cal-lbl-dot ok';
+  if(!el) return;
+  if(!evts || !evts.length){ el.innerHTML = noCal(); return; }
+  const now = new Date();
+  const todayStr = now.toDateString();
+  const tomorrowStr = new Date(now.getTime() + 86400000).toDateString();
+  const filtered = evts.filter(e => !e.isAllDay);
+  let lastDay = '', html = '';
+  filtered.forEach((ev, i) => {
+    const evDay = ev.date || todayStr;
+    if(evDay !== lastDay && evDay === tomorrowStr){
+      html += `<div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);padding:8px 0 4px;border-top:1px solid var(--b);margin-top:4px;">Tomorrow</div>`;
+      lastDay = evDay;
+    }
+    html += `<div class="cal-ev" style="animation-delay:${i*.05}s">
+      <div class="cal-time">${ev.start||'—'}</div>
+      <div class="cal-line you"></div>
+      <div class="cal-body"><div class="cal-name">${ev.title}</div>${ev.location?`<div class="cal-sub">${ev.location.split(',')[0]}</div>`:''}</div>
+    </div>`;
+  });
+  el.innerHTML = html || noCal();
 }
 
 function isCur(ev,now){try{const p=s=>{const[t,ap]=s.split(' ');let[h,m]=t.split(':').map(Number);if(ap==='PM'&&h!==12)h+=12;if(ap==='AM'&&h===12)h=0;const d=new Date(now);d.setHours(h,m,0,0);return d;};return ev.start&&ev.end&&now>=p(ev.start)&&now<=p(ev.end);}catch(e){return false;}}
@@ -4267,10 +4345,10 @@ function mobileAddTask(){
 function switchCalView(which, btn){
   document.querySelectorAll('#cal-toggle-tabs .hz-tab').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
-  const aaronView = document.getElementById('cal-view-aaron');
-  const mineView = document.getElementById('cal-view-mine');
-  if(aaronView) aaronView.style.display = which === 'aaron' ? 'flex' : 'none';
-  if(mineView) mineView.style.display = which === 'mine' ? 'flex' : 'none';
+  ['aaron','mine','personal','faye'].forEach(v => {
+    const el = document.getElementById(`cal-view-${v}`);
+    if(el) el.style.display = v === which ? 'flex' : 'none';
+  });
   // Update Now/Up Next strip color when switching calendars
   updateNowStrip(null, which);
 }
