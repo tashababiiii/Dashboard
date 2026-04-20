@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Natasha — Command Center</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+CiAgPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iOCIgZmlsbD0iIzJDMTY1NCIvPgogIDx0ZXh0IHg9IjE2IiB5PSIyMiIgZm9udC1mYW1pbHk9InNlcmlmIiBmb250LXNpemU9IjE4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjQzhBODRCIj7inKY8L3RleHQ+Cjwvc3ZnPg==">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Mono:wght@300;400;500&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -49,6 +50,7 @@
   --c-holiday:#1a4fc4;   /* sapphire */
   --c-white:#a06800;     /* antique gold */
   --c-browdy:#2e7d8c;    /* teal */
+  --c-rhodes:#8b5e3c;    /* warm brown */
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;overflow:hidden;}
@@ -1404,6 +1406,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
           <option value="holiday">Holiday</option>
           <option value="white">White</option>
           <option value="browdy">Browdy Weiner</option>
+          <option value="rhodes">Rhodes</option>
         </select>
       </div>
       <div style="display:flex;gap:8px;padding:0 20px;margin-bottom:14px;">
@@ -1623,6 +1626,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
           <option value="holiday">Holiday</option>
           <option value="white">White</option>
           <option value="browdy">Browdy Weiner</option>
+          <option value="rhodes">Rhodes</option>
         </select>
       </div>
     </div>
@@ -1811,6 +1815,7 @@ const CLIENTS=[
   {id:'holiday',label:'Holiday',color:'#6a87c8'},
   {id:'white',label:'White',color:'#c4a882'},
   {id:'browdy',label:'Browdy Weiner',color:'#2e7d8c'},
+  {id:'rhodes',label:'Rhodes',color:'#8b5e3c'},
 ];
 let S={
   tasks:[],fayeTasks:[],aaronTasks:[],officeTasks:[],
@@ -1818,7 +1823,7 @@ let S={
   waitingItems:[],
   focus:'',doneToday:0,capacity:70,capacityCeiling:40,capacityOverride:false,
   hz:'today',fhz:'today',ahz:'today',ws:'all',
-  fayeOpen:{doherty:true,garcia:true,morrell:true,holiday:true,white:true,browdy:true},
+  fayeOpen:{doherty:true,garcia:true,morrell:true,holiday:true,white:true,browdy:true,rhodes:true},
   completedMetrics:{total:0,by645:0,byFaye:0,byPersonal:0,byAaron:0,byStrategic:0,byOffice:0,log:[]},
   agentMetrics:{suggested:0,executed:0},
   iopGrades:{gp:null,events:null,office:null,loop:null},
@@ -3813,7 +3818,7 @@ ${rawText.slice(0, 6000)}`
         <div style="width:6px;height:6px;border-radius:50%;background:${priColors[t.priority] || 'var(--t3)'};flex-shrink:0;margin-top:4px;"></div>
         <div style="flex:1;min-width:0;">
           <div style="font-size:12px;color:var(--t);line-height:1.4;margin-bottom:4px;">${t.task}</div>
-          <select id="cft-cat-${i}" style="font-family:'DM Mono',monospace;font-size:10px;background:var(--s2);border:1px solid var(--bm);border-radius:2px;padding:2px 4px;color:var(--t2);outline:none;cursor:pointer;" onclick="event.stopPropagation()" onchange="toggleCftFayeClient(this,'cft-client-${i}')"><option value='645'>Office &amp; Events</option><option value='aaron'>Ops Support</option><option value='strategic'>Strategic</option><option value='faye'>Faye Clients</option><option value='personal'>Personal</option></select> <select id="cft-client-${i}" style="display:none;font-family:'DM Mono',monospace;font-size:10px;background:var(--s2);border:1px solid var(--bm);border-radius:2px;padding:2px 4px;color:var(--t2);outline:none;cursor:pointer;" onclick="event.stopPropagation()"><option value='doherty'>Doherty</option><option value='garcia'>Garcia-Huang</option><option value='morrell'>Morrell</option><option value='holiday'>Holiday</option><option value='white'>White</option><option value='browdy'>Browdy Weiner</option></select>
+          <select id="cft-cat-${i}" style="font-family:'DM Mono',monospace;font-size:10px;background:var(--s2);border:1px solid var(--bm);border-radius:2px;padding:2px 4px;color:var(--t2);outline:none;cursor:pointer;" onclick="event.stopPropagation()" onchange="toggleCftFayeClient(this,'cft-client-${i}')"><option value='645'>Office &amp; Events</option><option value='aaron'>Ops Support</option><option value='strategic'>Strategic</option><option value='faye'>Faye Clients</option><option value='personal'>Personal</option></select> <select id="cft-client-${i}" style="display:none;font-family:'DM Mono',monospace;font-size:10px;background:var(--s2);border:1px solid var(--bm);border-radius:2px;padding:2px 4px;color:var(--t2);outline:none;cursor:pointer;" onclick="event.stopPropagation()"><option value='doherty'>Doherty</option><option value='garcia'>Garcia-Huang</option><option value='morrell'>Morrell</option><option value='holiday'>Holiday</option><option value='white'>White</option><option value='browdy'>Browdy Weiner</option><option value='rhodes'>Rhodes</option></select>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
           <button onclick="addCapturedFileTask(${i})" style="background:var(--t);color:var(--bg);border:none;border-radius:2px;padding:3px 8px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;white-space:nowrap;">+ add</button>
@@ -3934,7 +3939,7 @@ ${text.slice(0, 6000)}`
         <div style="width:6px;height:6px;border-radius:50%;background:${priColors[t.priority] || 'var(--t3)'};flex-shrink:0;margin-top:4px;"></div>
         <div style="flex:1;min-width:0;">
           <div style="font-size:12px;color:var(--t);line-height:1.4;margin-bottom:4px;">${t.task}</div>
-          <select id="cft-cat-${i}" style="font-family:'DM Mono',monospace;font-size:10px;background:var(--s2);border:1px solid var(--bm);border-radius:2px;padding:2px 4px;color:var(--t2);outline:none;cursor:pointer;" onclick="event.stopPropagation()" onchange="toggleCftFayeClient(this,'cft-client-${i}')"><option value='645'>Office &amp; Events</option><option value='aaron'>Ops Support</option><option value='strategic'>Strategic</option><option value='faye'>Faye Clients</option><option value='personal'>Personal</option></select> <select id="cft-client-${i}" style="display:none;font-family:'DM Mono',monospace;font-size:10px;background:var(--s2);border:1px solid var(--bm);border-radius:2px;padding:2px 4px;color:var(--t2);outline:none;cursor:pointer;" onclick="event.stopPropagation()"><option value='doherty'>Doherty</option><option value='garcia'>Garcia-Huang</option><option value='morrell'>Morrell</option><option value='holiday'>Holiday</option><option value='white'>White</option><option value='browdy'>Browdy Weiner</option></select>
+          <select id="cft-cat-${i}" style="font-family:'DM Mono',monospace;font-size:10px;background:var(--s2);border:1px solid var(--bm);border-radius:2px;padding:2px 4px;color:var(--t2);outline:none;cursor:pointer;" onclick="event.stopPropagation()" onchange="toggleCftFayeClient(this,'cft-client-${i}')"><option value='645'>Office &amp; Events</option><option value='aaron'>Ops Support</option><option value='strategic'>Strategic</option><option value='faye'>Faye Clients</option><option value='personal'>Personal</option></select> <select id="cft-client-${i}" style="display:none;font-family:'DM Mono',monospace;font-size:10px;background:var(--s2);border:1px solid var(--bm);border-radius:2px;padding:2px 4px;color:var(--t2);outline:none;cursor:pointer;" onclick="event.stopPropagation()"><option value='doherty'>Doherty</option><option value='garcia'>Garcia-Huang</option><option value='morrell'>Morrell</option><option value='holiday'>Holiday</option><option value='white'>White</option><option value='browdy'>Browdy Weiner</option><option value='rhodes'>Rhodes</option></select>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
           <button onclick="addCapturedFileTask(${i})" style="background:var(--t);color:var(--bg);border:none;border-radius:2px;padding:3px 8px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;white-space:nowrap;">+ add</button>
@@ -4168,9 +4173,9 @@ async function runIntake(){
   let total=0;
   if(notes||faye||aaron||office){
     try{
-      const combined=`GENERAL NOTES:\n${notes}\n\nFAYE CLIENT TASKS (new tasks, updates from Garcia-Huang or Holiday recurring syncs — clients: doherty, garcia, morrell, holiday, white, browdy):\n${faye}\n\nASANA TASKS TAGGED TO ME:\n${asanaTrimmed}\n\nAARON TASKS:\n${aaron}\n\nOFFICE TASKS:\n${office}`;
+      const combined=`GENERAL NOTES:\n${notes}\n\nFAYE CLIENT TASKS (new tasks, updates from Garcia-Huang or Holiday recurring syncs — clients: doherty, garcia, morrell, holiday, white, browdy, rhodes):\n${faye}\n\nASANA TASKS TAGGED TO ME:\n${asanaTrimmed}\n\nAARON TASKS:\n${aaron}\n\nOFFICE TASKS:\n${office}`;
       const raw=await claude(
-        `Parse this morning intake. Return ONLY JSON array. Each: {"title":string,"type":"task"|"faye"|"aaron"|"office","tag":"645"|"personal","client":"doherty"|"garcia"|"morrell"|"holiday"|"white"|"browdy"|null,"priority":"high"|"med"|"low","effort":"quick"|"standard"|"deep","hz":"today"|"week"|"month"|"someday","note":string}. For effort: quick=under 5 min (send invite, book thing, pay bill, forward email), standard=15-30 min (draft, coordinate, prep), deep=1+ hours (build deck, write doc, create profile, plan event). For faye items set type=faye and client. For asana tasks set type=task tag=645. If Faye sync with Garcia-Huang or Holiday happened, treat their deadlines as high priority. Natasha is EA/Office Manager at 645 Ventures, manages Aaron Holiday, consults via Faye for 5 families.`,
+        `Parse this morning intake. Return ONLY JSON array. Each: {"title":string,"type":"task"|"faye"|"aaron"|"office","tag":"645"|"personal","client":"doherty"|"garcia"|"morrell"|"holiday"|"white"|"browdy"|"rhodes"|null,"priority":"high"|"med"|"low","effort":"quick"|"standard"|"deep","hz":"today"|"week"|"month"|"someday","note":string}. For effort: quick=under 5 min (send invite, book thing, pay bill, forward email), standard=15-30 min (draft, coordinate, prep), deep=1+ hours (build deck, write doc, create profile, plan event). For faye items set type=faye and client. For asana tasks set type=task tag=645. If Faye sync with Garcia-Huang or Holiday happened, treat their deadlines as high priority. Natasha is EA/Office Manager at 645 Ventures, manages Aaron Holiday, consults via Faye for 5 families.`,
         combined,2000
       );
       let items=[];try{items=JSON.parse(raw.replace(/```json|```/g,'').trim());}catch(e){}
