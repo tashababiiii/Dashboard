@@ -1,33 +1,11 @@
 const { google } = require('googleapis');
 const Anthropic = require('@anthropic-ai/sdk');
-
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI
-);
+const { parseCookies, setCorsHeaders, getOAuth2Client } = require('./_utils');
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-function parseCookies(req) {
-  const list = {};
-  const cookieHeader = req.headers?.cookie;
-  if (!cookieHeader) return list;
-  cookieHeader.split(';').forEach(cookie => {
-    let [name, ...rest] = cookie.split('=');
-    name = name?.trim();
-    if (!name) return;
-    list[name] = decodeURIComponent(rest.join('=').trim());
-  });
-  return list;
-}
-
 module.exports = async (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
+  setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -43,7 +21,6 @@ module.exports = async (req, res) => {
     const { dashboardState } = body || {};
     const state = dashboardState || {};
 
-    // Build dashboard context
     const tasks = (state.tasks || []).filter(t => !t.done)
       .map(t => `[${t.tag}][${t.hz}][${t.priority}] ${t.title}${t.note ? ' — ' + t.note : ''}`).join('\n');
     const fayeTasks = (state.fayeTasks || []).filter(t => !t.done)
@@ -53,20 +30,17 @@ module.exports = async (req, res) => {
     const waiting = Object.entries(state.waitingOn || {})
       .map(([k, v]) => v.map(w => `[WAITING/${k.toUpperCase()}] ${w.person}: ${w.what}`).join('\n')).join('\n');
 
-    // Try to get email context — with tight timeout
     let emailContext = '';
     try {
-      const cookies = parseCookies(req);
-      const tokenCookie = cookies['gcal_tokens'];
+      const tokenCookie = parseCookies(req)['gcal_tokens'];
       if (tokenCookie) {
         const tokens = JSON.parse(Buffer.from(tokenCookie, 'base64').toString('utf8'));
+        const oauth2Client = getOAuth2Client();
         oauth2Client.setCredentials(tokens);
         const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
         const listRes = await Promise.race([
           gmail.users.threads.list({
-            userId: 'me',
-            q: 'is:unread newer_than:7d -from:noreply',
-            maxResults: 8
+            userId: 'me', q: 'is:unread newer_than:7d -from:noreply', maxResults: 8
           }),
           new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
         ]);
@@ -85,9 +59,7 @@ module.exports = async (req, res) => {
         );
         emailContext = summaries.filter(r => r.status === 'fulfilled').map(r => r.value).join('\n');
       }
-    } catch(e) {
-      emailContext = '';
-    }
+    } catch(e) { emailContext = ''; }
 
     const prompt = `You are Natasha Bradley's Chief of Staff AI. Natasha is EA & Office Manager at 645 Ventures NYC, working toward a Chief of Staff promotion.
 
@@ -128,14 +100,9 @@ If nothing executable, return [].`;
 
     const raw = message.content?.find(b => b.type === 'text')?.text || '[]';
     let items = [];
-    try {
-      const cleaned = raw.replace(/```json|```/g, '').trim();
-      items = JSON.parse(cleaned);
-    } catch(e) {
-      items = [];
-    }
+    try { items = JSON.parse(raw.replace(/```json|```/g, '').trim()); } catch(e) {}
 
-    return res.status(200).json({ items });
+    return res.status(200).json({ items: Array.isArray(items) ? items : [] });
 
   } catch (error) {
     console.error('Agent queue error:', error.message);

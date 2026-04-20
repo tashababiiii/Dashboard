@@ -4,6 +4,9 @@
   "description": "Natasha's Command Center Dashboard",
   "dependencies": {
     "googleapis": "^140.0.0",
-    "@anthropic-ai/sdk": "^0.39.0"
+    "@anthropic-ai/sdk": "^0.39.0",
+    "pdf-parse": "^1.1.1",
+    "mammoth": "^1.8.0",
+    "xlsx": "^0.18.5"
   }
 }
