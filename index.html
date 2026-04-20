@@ -1961,8 +1961,8 @@ function addOT(title,category,priority='med'){
 }
 
 function toggleT(id){const t=S.tasks.find(t=>t.id===id);if(!t)return;t.done=!t.done;if(t.done){trackCompletion(t.tag);setTimeout(()=>{render();updateBadges();},400);}else{render();updateBadges();}save();metrics();}
-function toggleFT(id){const t=S.fayeTasks.find(t=>t.id===id);if(!t)return;t.done=!t.done;if(t.done){trackCompletion('faye');setTimeout(()=>{renderFaye();updateBadges();},400);}else{renderFaye();updateBadges();}save();metrics();}
-function toggleAT(id){const t=S.aaronTasks.find(t=>t.id===id);if(!t)return;t.done=!t.done;if(t.done){trackCompletion('aaron');setTimeout(()=>{renderAaron();updateBadges();},400);}else{renderAaron();updateBadges();}save();metrics();}
+function toggleFT(id){const t=S.fayeTasks.find(t=>t.id===id);if(!t)return;t.done=!t.done;if(t.done){trackCompletion('faye');setTimeout(()=>{render();renderFaye();updateBadges();},400);}else{render();renderFaye();updateBadges();}save();metrics();}
+function toggleAT(id){const t=S.aaronTasks.find(t=>t.id===id);if(!t)return;t.done=!t.done;if(t.done){trackCompletion('aaron');setTimeout(()=>{render();renderAaron();updateBadges();},400);}else{render();renderAaron();updateBadges();}save();metrics();}
 
 function quickAdd(e){if(e.key!=='Enter')return;const i=document.getElementById('new-task'),v=i.value.trim();if(!v)return;addTask(v,document.getElementById('new-tag').value,document.getElementById('new-hz').value);i.value='';i.focus();}
 function quickAddAaron(e){if(e.key!=='Enter')return;const i=document.getElementById('aaron-quick-inp'),v=i.value.trim();if(!v)return;addAT(v,document.getElementById('aaron-hz-sel').value);i.value='';i.focus();}
@@ -1993,7 +1993,7 @@ function render(){
       </div>
       <div style="display:flex;align-items:center;gap:6px;">
         <div class="t-check" onclick="toggleTask(${t.id},'${t._type||'main'}')"></div>
-        <button onclick="deleteTaskUnified(${t.id},'${t._type||'main'}')" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px;border-radius:2px;transition:color .15s;" onmouseover="this.style.color='var(--rose)'" onmouseout="this.style.color='var(--t3)'">✕</button>
+        <button onclick="event.stopPropagation();deleteTaskUnified(${t.id},'${t._type||'main'}')" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px;border-radius:2px;transition:color .15s;" onmouseover="this.style.color='var(--rose)'" onmouseout="this.style.color='var(--t3)'">✕</button>
       </div>
     </div>`).join(''):'<div class="empty-msg">Nothing here yet.</div>';
   ['today','week','month','someday'].forEach(hz=>{const el=document.getElementById(`c-${hz}`);if(el)el.textContent=S.tasks.filter(t=>t.hz===hz&&!t.done&&(S.ws==='all'||t.tag===S.ws)).length;});
@@ -2049,9 +2049,9 @@ function renderAaron(){
   // aaron-list is a hidden JS-compat element — no rendering needed
 }
 
-function deleteFayeTask(id){S.fayeTasks=S.fayeTasks.filter(t=>t.id!==id);save();renderFaye();updateBadges();}
+function deleteFayeTask(id){S.fayeTasks=S.fayeTasks.filter(t=>t.id!==id);save();render();renderFaye();updateBadges();}
 
-function deleteAaronTask(id){S.aaronTasks=S.aaronTasks.filter(t=>t.id!==id);save();renderAaron();updateBadges();}
+function deleteAaronTask(id){S.aaronTasks=S.aaronTasks.filter(t=>t.id!==id);save();render();renderAaron();updateBadges();}
 
 function metrics(){
   const allOpen=S.tasks.filter(t=>!t.done).length+S.fayeTasks.filter(t=>!t.done).length+S.officeTasks.filter(t=>!t.done).length;
