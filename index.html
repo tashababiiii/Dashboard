@@ -3555,8 +3555,8 @@ function deleteFromDrawer(){
   const id = parseInt(document.getElementById('td-task-id').value);
   const type = document.getElementById('td-task-type').value;
   if(type==='main'){ S.tasks=S.tasks.filter(t=>t.id!==id); render(); }
-  else if(type==='faye'){ S.fayeTasks=S.fayeTasks.filter(t=>t.id!==id); renderFaye(); }
-  else if(type==='aaron'){ S.aaronTasks=S.aaronTasks.filter(t=>t.id!==id); renderAaron(); }
+  else if(type==='faye'){ S.fayeTasks=S.fayeTasks.filter(t=>t.id!==id); render(); renderFaye(); }
+  else if(type==='aaron'){ S.aaronTasks=S.aaronTasks.filter(t=>t.id!==id); render(); renderAaron(); }
   save(); updateBadges(); closeTaskDrawer();
 }
 
