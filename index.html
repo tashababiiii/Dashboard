@@ -3651,16 +3651,22 @@ async function runSmartSync(){
     // Run real Gmail + Slack scans in parallel
     status.textContent = 'Checking Gmail…';
     const [gmailRes, slackRes] = await Promise.allSettled([
-      fetch('/api/gmail-scan', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({dashboardState: S}) }),
+      fetch('/api/gmail-scan', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quick: true}) }),
       fetch('/api/slack-scan', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({dashboardState: S}) })
     ]);
 
     const found = [];
 
-    // Parse Gmail results
+    // Parse Gmail results — gmail-scan returns {tasks, waiting, fyi}
     if(gmailRes.status === 'fulfilled' && gmailRes.value.ok){
       const gd = await gmailRes.value.json();
-      if(gd.items && gd.items.length) found.push(...gd.items.map(i=>({...i, _source:'email'})));
+      // Map tasks → items with title/reason fields Smart Sync expects
+      if(gd.tasks?.length) found.push(...gd.tasks.map(t=>({
+        title: t.action, reason: `${t.from} · ${t.priority||'med'} priority`, _source:'email'
+      })));
+      if(gd.waiting?.length) found.push(...gd.waiting.map(w=>({
+        title: `Waiting: ${w.waiting_for}`, reason: `From ${w.from}`, _source:'email'
+      })));
     }
 
     // Parse Slack results
