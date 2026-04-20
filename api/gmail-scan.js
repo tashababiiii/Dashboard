@@ -21,19 +21,28 @@ module.exports = async (req, res) => {
     oauth2Client.setCredentials(tokens);
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-    // Run two queries in parallel:
-    // 1. Broad inbox scan — all real email from the last 3 days, no promotions/social
-    // 2. Targeted scan — anything from key people regardless of category
+    // Parse body — check for quick mode flag (used by Smart Sync for speed)
+    let body = req.body;
+    if (!body) {
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      body = JSON.parse(Buffer.concat(chunks).toString());
+    }
+    if (typeof body === 'string') body = JSON.parse(body);
+    const isQuick = !!(body?.quick);
+
+    // Quick mode (Smart Sync): only key people, last 1 day, fewer threads
+    // Full mode (Email Scan): broad inbox + key people, last 3 days, more threads
     const [broadRes, keyPeopleRes] = await Promise.allSettled([
-      gmail.users.threads.list({
+      isQuick ? Promise.resolve({ data: { threads: [] } }) : gmail.users.threads.list({
         userId: 'me',
         q: 'newer_than:3d -from:noreply -from:no-reply -from:notifications@ -from:mailer@ -category:promotions -category:social',
         maxResults: 20
       }),
       gmail.users.threads.list({
         userId: 'me',
-        q: 'newer_than:7d (from:aholidayiii@645ventures.com OR from:natasha.holiday@rbccm.com OR from:nnamdi@645ventures.com OR from:lquirk@645ventures.com OR from:khardeman@645ventures.com)',
-        maxResults: 15
+        q: `newer_than:${isQuick ? '1d' : '7d'} (from:aholidayiii@645ventures.com OR from:natasha.holiday@rbccm.com OR from:nnamdi@645ventures.com OR from:lquirk@645ventures.com OR from:khardeman@645ventures.com)`,
+        maxResults: isQuick ? 8 : 15
       })
     ]);
 
@@ -42,7 +51,7 @@ module.exports = async (req, res) => {
     const allThreads = [];
     for (const result of [broadRes, keyPeopleRes]) {
       if (result.status === 'fulfilled') {
-        for (const t of (result.value.data.threads || [])) {
+        for (const t of (result.value.data?.threads || [])) {
           if (!seenIds.has(t.id)) {
             seenIds.add(t.id);
             allThreads.push(t);
@@ -53,9 +62,9 @@ module.exports = async (req, res) => {
 
     if (allThreads.length === 0) return res.status(200).json({ tasks: [], waiting: [], fyi: [] });
 
-    // Fetch full metadata for each thread including To/CC so Claude has full context
+    // Fetch metadata — quick mode fetches fewer threads
     const summaries = await Promise.allSettled(
-      allThreads.slice(0, 25).map(async t => {
+      allThreads.slice(0, isQuick ? 8 : 25).map(async t => {
         const thread = await gmail.users.threads.get({
           userId: 'me', id: t.id, format: 'metadata',
           metadataHeaders: ['Subject', 'From', 'To', 'Cc', 'Date']
@@ -79,7 +88,7 @@ module.exports = async (req, res) => {
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const message = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2000,
+      max_tokens: isQuick ? 800 : 2000,
       messages: [{
         role: 'user',
         content: `Triage these emails for Natasha Bradley, EA & Office Manager at 645 Ventures NYC.
