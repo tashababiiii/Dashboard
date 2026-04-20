@@ -2354,18 +2354,79 @@ function renderWaiting(){
         <div class="waiting-col-title" style="color:${sec.color}">${sec.label}</div>
         <div class="client-cnt">${items.length}</div>
       </div>
-      ${items.map(w=>`
-        <div class="waiting-item">
-          <div class="waiting-person">${w.person}</div>
-          <div class="waiting-what">${w.what}</div>
-          <div class="waiting-since ${w.since.includes('day')&&!w.since.includes('Today')?'overdue':''}">${w.since}</div>
-        </div>`).join('')}
+      ${items.map(w=>{
+        const isOverdue = w.since && w.since.includes('day') && !w.since.includes('Today');
+        return `<div class="waiting-item" id="wi-${w.id}">
+          <div style="display:flex;align-items:flex-start;gap:6px;">
+            <div style="flex:1;min-width:0;">
+              <div class="waiting-person">${w.person}</div>
+              <div class="waiting-what">${w.what}</div>
+              <div class="waiting-since ${isOverdue?'overdue':''}">${w.since}</div>
+            </div>
+            <div style="display:flex;gap:3px;flex-shrink:0;margin-top:2px;">
+              <button title="Edit" onclick="editWaiting('${sec.key}','${w.id}')" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:12px;padding:2px 4px;border-radius:2px;transition:color .15s;" onmouseover="this.style.color='var(--blue)'" onmouseout="this.style.color='var(--t3)'">✎</button>
+              <button title="Resolved — remove" onclick="resolveWaiting('${sec.key}','${w.id}')" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:13px;padding:2px 4px;border-radius:2px;transition:color .15s;" onmouseover="this.style.color='var(--sage)'" onmouseout="this.style.color='var(--t3)'">✓</button>
+              <button title="Delete" onclick="deleteWaiting('${sec.key}','${w.id}')" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:13px;padding:2px 4px;border-radius:2px;transition:color .15s;" onmouseover="this.style.color='var(--rose)'" onmouseout="this.style.color='var(--t3)'">✕</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
       <div class="waiting-add">
         <input class="waiting-inp" placeholder="+ Who / what…" onkeydown="addWaiting(event,'${sec.key}')" />
       </div>
     </div>`;
   }).join('');
   document.getElementById('tb-waiting').textContent=Object.values(S.waitingOn).reduce((a,b)=>a+b.length,0);
+}
+
+function resolveWaiting(key, id){
+  if(!S.waitingOn[key]) return;
+  const item = S.waitingOn[key].find(w=>w.id===id);
+  if(!item) return;
+  // Log to completedMetrics for tracking
+  trackCompletion('waiting', `Waiting on: ${item.person} — ${item.what}`);
+  // Animate out then remove
+  const el = document.getElementById(`wi-${id}`);
+  if(el){ el.style.transition='opacity .3s'; el.style.opacity='0'; setTimeout(()=>{ S.waitingOn[key]=S.waitingOn[key].filter(w=>w.id!==id); save();renderWaiting();metrics(); },300); }
+  else { S.waitingOn[key]=S.waitingOn[key].filter(w=>w.id!==id); save();renderWaiting();metrics(); }
+}
+
+function deleteWaiting(key, id){
+  if(!S.waitingOn[key]) return;
+  S.waitingOn[key]=S.waitingOn[key].filter(w=>w.id!==id);
+  save();renderWaiting();metrics();
+}
+
+function editWaiting(key, id){
+  if(!S.waitingOn[key]) return;
+  const item = S.waitingOn[key].find(w=>w.id===id);
+  if(!item) return;
+  const el = document.getElementById(`wi-${id}`);
+  if(!el) return;
+  // Replace item content with inline edit fields
+  el.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:5px;padding:2px 0;">
+      <input id="we-person-${id}" value="${item.person}" placeholder="Who…"
+        style="width:100%;background:transparent;border:none;border-bottom:1px solid var(--bm);padding:3px 0;font-family:'Jost',sans-serif;font-size:12px;color:var(--t);outline:none;" />
+      <input id="we-what-${id}" value="${item.what}" placeholder="What…"
+        style="width:100%;background:transparent;border:none;border-bottom:1px solid var(--bm);padding:3px 0;font-family:'Jost',sans-serif;font-size:13px;color:var(--t);outline:none;" />
+      <div style="display:flex;gap:6px;margin-top:3px;">
+        <button onclick="saveWaitingEdit('${key}','${id}')" style="flex:1;padding:4px;background:var(--violet);color:#fff;border:none;border-radius:2px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.06em;cursor:pointer;">Save</button>
+        <button onclick="renderWaiting()" style="flex:1;padding:4px;background:var(--s2);color:var(--t3);border:1px solid var(--bm);border-radius:2px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.06em;cursor:pointer;">Cancel</button>
+      </div>
+    </div>`;
+  document.getElementById(`we-what-${id}`)?.focus();
+}
+
+function saveWaitingEdit(key, id){
+  if(!S.waitingOn[key]) return;
+  const item = S.waitingOn[key].find(w=>w.id===id);
+  if(!item) return;
+  const personEl = document.getElementById(`we-person-${id}`);
+  const whatEl = document.getElementById(`we-what-${id}`);
+  if(personEl) item.person = personEl.value.trim();
+  if(whatEl) item.what = whatEl.value.trim();
+  save();renderWaiting();
 }
 
 function addWaiting(e,key){
