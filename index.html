@@ -1037,9 +1037,16 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
           <!-- Capacity -->
           <div class="cap-widget sb-sec">
             <div class="cap-lbl">Capacity</div>
-            <div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:4px;">
-              <div class="cap-pct" id="cap-pct">—%</div>
-              <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);padding-bottom:4px;" id="cap-auto-pct"></div>
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:4px;">
+              <div style="display:flex;align-items:flex-end;gap:8px;">
+                <div class="cap-pct" id="cap-pct">—%</div>
+                <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--sage);padding-bottom:4px;" id="cap-auto-pct">auto-calculated</div>
+              </div>
+              <button id="cap-override-btn" onclick="toggleCapacityOverride()" style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:.06em;text-transform:uppercase;background:none;border:none;color:var(--t3);cursor:pointer;padding:0;padding-bottom:4px;">⚙ Override</button>
+            </div>
+            <!-- Override slider — hidden unless override is on -->
+            <div id="cap-override-row" style="display:none;margin-bottom:6px;">
+              <input type="range" min="0" max="130" id="cap-slider" oninput="updateCapacity(this.value)" style="width:100%;accent-color:var(--violet);" />
             </div>
             <div class="cap-track"><div class="cap-fill" id="cap-fill" style="width:0%"></div></div>
             <div class="cap-zone-labels"><span class="cap-zone">Comfortable</span><span class="cap-zone">Full</span><span class="cap-zone">Over</span></div>
@@ -1576,6 +1583,17 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
       </div>
     </div>
 
+    <!-- Effort selector -->
+    <div class="td-field" style="margin-bottom:12px;">
+      <div class="td-label">Effort</div>
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <button id="td-eff-quick"    onclick="setDrawerEffort('quick')"    class="td-eff-btn" style="flex:1;padding:7px 6px;border-radius:3px;border:1px solid var(--bm);background:var(--surface);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;transition:all .15s;">⚡ Quick</button>
+        <button id="td-eff-standard" onclick="setDrawerEffort('standard')" class="td-eff-btn active-eff" style="flex:1;padding:7px 6px;border-radius:3px;border:1px solid var(--violet);background:var(--violet-d);color:var(--violet);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;transition:all .15s;">📋 Standard</button>
+        <button id="td-eff-deep"     onclick="setDrawerEffort('deep')"     class="td-eff-btn" style="flex:1;padding:7px 6px;border-radius:3px;border:1px solid var(--bm);background:var(--surface);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;transition:all .15s;">🧠 Deep</button>
+      </div>
+      <div id="td-eff-desc" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--t3);margin-top:5px;">15–30 min · moderate focus</div>
+    </div>
+
     <div class="td-row">
       <div class="td-field">
         <div class="td-label">Horizon</div>
@@ -1798,7 +1816,7 @@ let S={
   tasks:[],fayeTasks:[],aaronTasks:[],officeTasks:[],
   delegations:[],
   waitingItems:[],
-  focus:'',doneToday:0,capacity:70,
+  focus:'',doneToday:0,capacity:70,capacityCeiling:40,capacityOverride:false,
   hz:'today',fhz:'today',ahz:'today',ws:'all',
   fayeOpen:{doherty:true,garcia:true,morrell:true,holiday:true,white:true,browdy:true},
   completedMetrics:{total:0,by645:0,byFaye:0,byPersonal:0,byAaron:0,byStrategic:0,byOffice:0,log:[]},
@@ -2519,16 +2537,36 @@ function classifyTask(t){
 }
 
 function calcAutoCapacity(){
-  const openMain = S.tasks.filter(t=>!t.done);
-  const openFaye = S.fayeTasks.filter(t=>!t.done);
-  const openAaron = S.aaronTasks.filter(t=>!t.done);
-  const totalOpen = openMain.length + openFaye.length + openAaron.length;
-  const highPri = [...openMain,...openFaye,...openAaron].filter(t=>t.priority==='high').length;
-  const todayTasks = openMain.filter(t=>t.hz==='today').length + openAaron.filter(t=>t.hz==='today').length;
-  const waiting = Object.values(S.waitingOn||{}).reduce((a,b)=>a+b.length,0);
-  // Score: base from open tasks, weighted by priority and today items
-  let score = Math.min(130, Math.round((totalOpen * 4) + (highPri * 6) + (todayTasks * 3) + (waiting * 1.5)));
-  return Math.max(0, score);
+  // Effort-weighted capacity model
+  // Points: Quick=1.5, Standard=5, Deep=13
+  // Today tasks drive capacity; future horizon tasks add a smaller background load
+  const effortPts = { quick: 1.5, standard: 5, deep: 13 };
+  const CAPACITY_CEILING = S.capacityCeiling || 40; // points = 100%
+
+  function taskPts(t, isToday){
+    const base = effortPts[t.effort || 'standard'];
+    const priorityMult = t.priority === 'high' ? 1.2 : t.priority === 'low' ? 0.8 : 1;
+    const horizonMult  = isToday ? 1 : 0.25; // non-today tasks are background load
+    return base * priorityMult * horizonMult;
+  }
+
+  const allTasks = [
+    ...S.tasks.filter(t=>!t.done),
+    ...S.fayeTasks.filter(t=>!t.done),
+    ...S.aaronTasks.filter(t=>!t.done)
+  ];
+
+  let total = 0;
+  allTasks.forEach(t => {
+    total += taskPts(t, t.hz === 'today');
+  });
+
+  // Waiting On adds a small mental load even when not actionable
+  const waitingLoad = Object.values(S.waitingOn||{}).reduce((a,b)=>a+b.length,0) * 0.5;
+  total += waitingLoad;
+
+  const pct = Math.round((total / CAPACITY_CEILING) * 100);
+  return Math.min(130, Math.max(0, pct));
 }
 
 function renderCapacityBreakdown(){
@@ -2601,15 +2639,57 @@ function renderSparkline(){
 
 function updateCapacity(v){
   S.capacity=parseInt(v);save();
+  renderCapacityUI(parseInt(v));
+}
+
+function autoUpdateCapacity(){
+  // Called after any task change — updates capacity unless user has overridden
+  if(S.capacityOverride) return;
+  const auto = calcAutoCapacity();
+  S.capacity = auto;
+  save();
+  renderCapacityUI(auto);
+}
+
+function toggleCapacityOverride(){
+  S.capacityOverride = !S.capacityOverride;
+  save();
+  const row = document.getElementById('cap-override-row');
+  if(row) row.style.display = S.capacityOverride ? 'block' : 'none';
+  const slider = document.getElementById('cap-slider');
+  if(slider) slider.value = S.capacity;
+  setCapacityOverride(S.capacityOverride);
+}
+function setCapacityOverride(override){
+  S.capacityOverride = override;
+  save();
+  const btn = document.getElementById('cap-override-btn');
+  if(btn){
+    btn.textContent = override ? '🔒 Override on — click to auto' : '⚙ Override';
+    btn.style.color = override ? 'var(--amber)' : 'var(--t3)';
+  }
+  if(!override) autoUpdateCapacity();
+}
+
+function renderCapacityUI(v){
   const pct=document.getElementById('cap-pct');
   const fill=document.getElementById('cap-fill');
   if(pct)pct.textContent=`${v}%`;
-  const color=v<80?'var(--sage)':v<100?'var(--gold)':'var(--rose)';
+  const color=v<70?'var(--sage)':v<90?'var(--gold)':'var(--rose)';
   if(fill){fill.style.width=`${Math.min(v,100)}%`;fill.style.background=color;}
-  // Auto score
+  // Show auto value alongside
   const auto = calcAutoCapacity();
   const autoEl = document.getElementById('cap-auto-pct');
-  if(autoEl) autoEl.textContent = `${auto}% auto`;
+  if(autoEl){
+    autoEl.textContent = S.capacityOverride ? `auto: ${auto}%` : `auto-calculated`;
+    autoEl.style.color = S.capacityOverride ? 'var(--t3)' : 'var(--sage)';
+  }
+  // Override button state
+  const btn = document.getElementById('cap-override-btn');
+  if(btn){
+    btn.textContent = S.capacityOverride ? '🔒 Override on' : '⚙ Override';
+    btn.style.color = S.capacityOverride ? 'var(--amber)' : 'var(--t3)';
+  }
   renderCapacityBreakdown();
   renderSparkline();
 }
@@ -2618,17 +2698,23 @@ function updateCapacity(v){
 const pOrd={high:0,med:1,low:2};
 const tagLabel={645:'Office & Events',personal:'Personal',aaron:'Ops Support',strategic:'Strategic',office:'Office & Events',faye:'Faye'};
 
-function addTask(title,tag,hz,priority='med',note=''){
-  S.tasks.push({id:Date.now()+Math.random(),title,tag,hz,priority,note,done:false,at:new Date().toISOString()});
+function addTask(title,tag,hz,priority='med',note='',effort='standard'){
+  const t={id:Date.now()+Math.random(),title,tag,hz,priority,note,effort,done:false,at:new Date().toISOString()};
+  S.tasks.push(t);
   save();render();updateBadges();
+  return t;
 }
-function addFT(title,client,hz,priority='med',note=''){
-  S.fayeTasks.push({id:Date.now()+Math.random(),title,client,hz,priority,note,done:false,at:new Date().toISOString()});
+function addFT(title,client,hz,priority='med',note='',effort='standard'){
+  const t={id:Date.now()+Math.random(),title,client,hz,priority,note,effort,done:false,at:new Date().toISOString()};
+  S.fayeTasks.push(t);
   save();renderFaye();updateBadges();
+  return t;
 }
-function addAT(title,hz='week',priority='med',note=''){
-  S.aaronTasks.push({id:Date.now()+Math.random(),title,hz,priority,note,done:false,at:new Date().toISOString()});
+function addAT(title,hz='week',priority='med',note='',effort='standard'){
+  const t={id:Date.now()+Math.random(),title,hz,priority,note,effort,done:false,at:new Date().toISOString()};
+  S.aaronTasks.push(t);
   save();renderAaron();updateBadges();
+  return t;
 }
 function addOT(title,category,priority='med'){
   S.officeTasks.push({id:Date.now()+Math.random(),title,category,priority,done:false,at:new Date().toISOString()});
@@ -2696,7 +2782,7 @@ function render(){
       <div class="t-bar ${t.priority}"></div>
       <div class="t-body" onclick="openTaskDrawer(${t.id},'${t._type||'main'}')" style="cursor:pointer;flex:1;">
         <div class="t-tags"><span class="tag t-${t.tag}">${t._type==='faye'&&t.client?`Faye · ${t.client.charAt(0).toUpperCase()+t.client.slice(1)}`:(tagLabel[t.tag]||t.tag)}</span>${t.note||t.source?`<span class="t-note">${t.source||t.note}</span>`:''}</div>
-        <div class="task-title" id="tt-${t.id}">${t.title}${t.detailNotes?` <span style="font-size:11px;color:var(--t3);font-family:'DM Mono',monospace;">···</span>`:''}${t.due?`<span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);margin-left:6px;">due ${t.due}</span>`:''}</div>
+        <div class="task-title" id="tt-${t.id}">${t.title}${t.detailNotes?` <span style="font-size:11px;color:var(--t3);font-family:'DM Mono',monospace;">···</span>`:''}${t.due?`<span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);margin-left:6px;">due ${t.due}</span>`:''}${t.effort&&t.effort!=='standard'?`<span style="font-family:'DM Mono',monospace;font-size:8px;color:var(--t3);margin-left:5px;">${t.effort==='quick'?'⚡':'🧠'}</span>`:''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;">
         <div class="t-check" onclick="toggleTask(${t.id},'${t._type||'main'}')"></div>
@@ -2774,6 +2860,7 @@ function metrics(){
   if(cCompleted) cCompleted.textContent = (S.completedMetrics?.total||0);
   document.getElementById('m-waiting').textContent=allWaiting;
   renderCapacityBreakdown();
+  autoUpdateCapacity();
 }
 
 // ── COMPLETED TASK TRACKING ──
@@ -4054,7 +4141,7 @@ async function runIntake(){
     try{
       const combined=`GENERAL NOTES:\n${notes}\n\nFAYE CLIENT TASKS (new tasks, updates from Garcia-Huang or Holiday recurring syncs — clients: doherty, garcia, morrell, holiday, white, browdy):\n${faye}\n\nASANA TASKS TAGGED TO ME:\n${asanaTrimmed}\n\nAARON TASKS:\n${aaron}\n\nOFFICE TASKS:\n${office}`;
       const raw=await claude(
-        `Parse this morning intake. Return ONLY JSON array. Each: {"title":string,"type":"task"|"faye"|"aaron"|"office","tag":"645"|"personal","client":"doherty"|"garcia"|"morrell"|"holiday"|"white"|"browdy"|null,"priority":"high"|"med"|"low","hz":"today"|"week"|"month"|"someday","note":string}. For faye items set type=faye and client. For asana tasks set type=task tag=645. If Faye sync with Garcia-Huang or Holiday happened, treat their deadlines as high priority. Natasha is EA/Office Manager at 645 Ventures, manages Aaron Holiday, consults via Faye for 5 families.`,
+        `Parse this morning intake. Return ONLY JSON array. Each: {"title":string,"type":"task"|"faye"|"aaron"|"office","tag":"645"|"personal","client":"doherty"|"garcia"|"morrell"|"holiday"|"white"|"browdy"|null,"priority":"high"|"med"|"low","effort":"quick"|"standard"|"deep","hz":"today"|"week"|"month"|"someday","note":string}. For effort: quick=under 5 min (send invite, book thing, pay bill, forward email), standard=15-30 min (draft, coordinate, prep), deep=1+ hours (build deck, write doc, create profile, plan event). For faye items set type=faye and client. For asana tasks set type=task tag=645. If Faye sync with Garcia-Huang or Holiday happened, treat their deadlines as high priority. Natasha is EA/Office Manager at 645 Ventures, manages Aaron Holiday, consults via Faye for 5 families.`,
         combined,2000
       );
       let items=[];try{items=JSON.parse(raw.replace(/```json|```/g,'').trim());}catch(e){}
@@ -4488,6 +4575,31 @@ function addCheckedEmailWaiting() {
 
 // ── TASK DETAIL DRAWER ──
 let _drawerPriority = 'med';
+let _drawerEffort = 'standard';
+
+const EFFORT_META = {
+  quick:    { label: '⚡ Quick',    desc: 'Under 5 min · low mental load', pts: 1.5 },
+  standard: { label: '📋 Standard', desc: '15–30 min · moderate focus',    pts: 5 },
+  deep:     { label: '🧠 Deep',     desc: '1+ hours · high judgment / output', pts: 13 }
+};
+
+function setDrawerEffort(e){
+  _drawerEffort = e;
+  updateDrawerEffortBtns();
+}
+function updateDrawerEffortBtns(){
+  ['quick','standard','deep'].forEach(e => {
+    const btn = document.getElementById(`td-eff-${e}`);
+    if(!btn) return;
+    const isActive = _drawerEffort === e;
+    btn.style.borderColor  = isActive ? 'var(--violet)' : 'var(--bm)';
+    btn.style.background   = isActive ? 'var(--violet-d)' : 'var(--surface)';
+    btn.style.color        = isActive ? 'var(--violet)' : 'var(--t3)';
+    btn.style.fontWeight   = isActive ? '600' : '400';
+  });
+  const desc = document.getElementById('td-eff-desc');
+  if(desc) desc.textContent = EFFORT_META[_drawerEffort]?.desc || '';
+}
 
 function openTaskDrawer(id, type='main'){
   const drawer = document.getElementById('task-drawer');
@@ -4534,6 +4646,10 @@ function openTaskDrawer(id, type='main'){
   // Priority
   _drawerPriority = t.priority || 'med';
   updateDrawerPriorityBtns();
+
+  // Effort
+  _drawerEffort = t.effort || 'standard';
+  updateDrawerEffortBtns();
 
   // Meta
   if(t.created){
@@ -4586,6 +4702,7 @@ function saveTaskDrawer(){
   t.due = document.getElementById('td-due').value || '';
   t.source = document.getElementById('td-source').value.trim();
   t.priority = _drawerPriority || t.priority || 'med';
+  t.effort = _drawerEffort || t.effort || 'standard';
   t.hz = document.getElementById('td-hz').value || t.hz || 'today';
 
   // Tag only applies to main tasks — faye uses client, aaron is its own array
@@ -5427,7 +5544,7 @@ setInterval(updateNowStrip, 60000); // refresh Now/Up Next every minute
 seed();
 render(); renderFaye(); renderAaron(); renderDelegation();
 loadFocus(); metrics(); updateBadges();
-updateCapacity(S.capacity);
+if(S.capacityOverride){ renderCapacityUI(S.capacity); } else { autoUpdateCapacity(); }
 // cap-slider removed
 renderSparkline();
 loadCalendars(); setInterval(loadCalendars, 30*60*1000);
