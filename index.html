@@ -554,7 +554,24 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 
   /* Dashboard body: single column, no sidebar */
   #panel-dashboard > div { grid-template-columns: 1fr !important; }
-  .main-sidebar { display: none; } /* Accessed via swipe-up sheet */
+  .main-sidebar { display: none; } /* Hidden on mobile tasks — shown via Calendar tab */
+
+  /* Hide desktop center calendar column on mobile tasks view by default */
+  #panel-dashboard > div > div:nth-child(2) { display: none; }
+
+  /* mob-hide utility */
+  .mob-hide { display: none !important; }
+
+  /* Mobile calendar full screen when active */
+  #mob-cal-view, #mob-tools-view {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    bottom: 64px;
+    background: var(--bg);
+    z-index: 50;
+    overflow-y: auto;
+    flex-direction: column;
+  }
 
   /* Stats row — smaller */
   .stats-row { padding: 0; }
@@ -654,6 +671,31 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
   .people-grid { grid-template-columns: 1fr 1fr; }
   .office-grid { grid-template-columns: 1fr; }
   .rhythms-grid { grid-template-columns: 1fr; }
+
+  /* Mobile: hide center calendar col and sidebar — Tasks tab is tasks only */
+  .mob-hide { display: none !important; }
+
+  /* Mobile calendar view — full height */
+  #mob-cal-view {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #mob-cal-view.active { display: flex; }
+
+  /* Mobile tools view */
+  #mob-tools-view {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    overflow-y: auto;
+    gap: 0;
+  }
+  #mob-tools-view.active { display: flex; }
+
+  /* Ritual buttons row — keep visible at top on tasks tab */
+  .ritual-buttons-row { flex-shrink: 0; }
 }
 
 /* Mobile elements hidden on desktop */
@@ -1225,30 +1267,73 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
   </div><!-- end main-col -->
 
   <!-- ── MOBILE BOTTOM NAV ── -->
-  <nav class="mobile-bottom-nav">
-    <div class="mobile-nav-item active" onclick="switchTab('dashboard',this)">
-      <div style="position:relative;">
-        <div class="mobile-nav-icon">⊞</div>
+  <!-- ── MOBILE CALENDAR VIEW ── -->
+  <div id="mob-cal-view">
+    <!-- Pulls from existing calendar data — mirrors the desktop center column -->
+    <div style="padding:9px 14px 8px;border-bottom:1px solid var(--b);display:flex;align-items:baseline;justify-content:space-between;flex-shrink:0;">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:500;color:var(--t);">Today's Schedule</div>
+      <span style="cursor:pointer;font-size:9px;font-family:'DM Mono',monospace;color:var(--t3);" onclick="loadCalendars()">↻ Refresh</span>
+    </div>
+    <div style="display:flex;border-bottom:1px solid var(--b);flex-shrink:0;overflow-x:auto;">
+      <button class="hz-tab active" style="font-size:11px;border-right:1px solid var(--b);white-space:nowrap;" onclick="switchCalView('all',this)">All</button>
+      <button class="hz-tab" style="font-size:11px;border-right:1px solid var(--b);white-space:nowrap;" onclick="switchCalView('aaron',this)">Aaron</button>
+      <button class="hz-tab" style="font-size:11px;border-right:1px solid var(--b);white-space:nowrap;" onclick="switchCalView('mine',this)">645</button>
+      <button class="hz-tab" style="font-size:11px;border-right:1px solid var(--b);white-space:nowrap;" onclick="switchCalView('personal',this)">Personal</button>
+      <button class="hz-tab" style="font-size:11px;white-space:nowrap;" onclick="switchCalView('faye',this)">Faye</button>
+    </div>
+    <!-- Reuse the same cal containers — loadCalendars already populates them -->
+    <div style="flex:1;overflow-y:auto;padding:8px 0;" id="mob-cal-content">
+      <div id="mob-all-cal" style="padding:0 14px;"></div>
+    </div>
+  </div>
+
+  <!-- ── MOBILE TOOLS VIEW ── -->
+  <div id="mob-tools-view">
+    <!-- Email Scan -->
+    <div style="border-bottom:1px solid var(--b);padding:12px 16px;flex-shrink:0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--t2);font-weight:600;">📧 Email Scan</div>
+        <button onclick="runEmailScan()" style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:5px 12px;background:var(--amber);color:#fff;border:none;border-radius:3px;cursor:pointer;">Scan →</button>
       </div>
+      <div id="mob-email-results" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--t3);">Tap Scan to check your inbox</div>
+    </div>
+    <!-- Slack Scan -->
+    <div style="border-bottom:1px solid var(--b);padding:12px 16px;flex-shrink:0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--t2);font-weight:600;">💬 Slack Scan</div>
+        <button onclick="runSlackScan()" style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:5px 12px;background:var(--violet);color:#fff;border:none;border-radius:3px;cursor:pointer;">Scan →</button>
+      </div>
+      <div id="mob-slack-results" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--t3);">Tap Scan to check Slack</div>
+    </div>
+    <!-- Smart Sync -->
+    <div style="padding:12px 16px;flex-shrink:0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--t2);font-weight:600;">⟳ Smart Sync</div>
+        <button onclick="runSmartSync()" style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:5px 12px;background:var(--sage);color:#fff;border:none;border-radius:3px;cursor:pointer;">Sync →</button>
+      </div>
+      <div id="mob-sync-results" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--t3);">Tap to run a quick combined scan</div>
+    </div>
+  </div>
+
+  <nav class="mobile-bottom-nav" id="mobile-bottom-nav">
+    <div class="mobile-nav-item active" id="mob-tab-tasks" onclick="switchMobileTab('tasks',this)">
+      <div style="position:relative;"><div class="mobile-nav-icon">⊞</div></div>
       <div class="mobile-nav-lbl">Tasks</div>
     </div>
-    <div class="mobile-nav-item" onclick="switchTab('agent',this)">
+    <div class="mobile-nav-item" id="mob-tab-calendar" onclick="switchMobileTab('calendar',this)">
+      <div style="position:relative;"><div class="mobile-nav-icon">📅</div></div>
+      <div class="mobile-nav-lbl">Calendar</div>
+    </div>
+    <div class="mobile-nav-item" id="mob-tab-agent" onclick="switchMobileTab('agent',this)">
       <div style="position:relative;">
         <div class="mobile-nav-icon">✦</div>
         <div class="mobile-nav-badge" style="background:var(--violet);" id="mobile-badge-agent">0</div>
       </div>
       <div class="mobile-nav-lbl">Agent</div>
     </div>
-    <div class="mobile-nav-item" onclick="switchTab('waiting',this)">
-      <div style="position:relative;">
-        <div class="mobile-nav-icon">⏳</div>
-        <div class="mobile-nav-badge" style="background:var(--rose);" id="mobile-badge-waiting">0</div>
-      </div>
-      <div class="mobile-nav-lbl">Waiting</div>
-    </div>
-    <div class="mobile-nav-item" onclick="switchTab('goals',this)">
-      <div style="position:relative;"><div class="mobile-nav-icon">◆</div></div>
-      <div class="mobile-nav-lbl">Goals</div>
+    <div class="mobile-nav-item" id="mob-tab-tools" onclick="switchMobileTab('tools',this)">
+      <div style="position:relative;"><div class="mobile-nav-icon">⟳</div></div>
+      <div class="mobile-nav-lbl">Tools</div>
     </div>
   </nav>
 
@@ -1817,6 +1902,95 @@ function calcIOP(){
 }
 
 // ── TABS ──
+// ── MOBILE TAB SWITCHING ──
+// 4-tab mobile nav: Tasks | Calendar | Agent | Tools
+// Tasks = My Priorities full height (center calendar col + sidebar hidden)
+// Calendar = Today's Schedule dedicated full screen
+// Agent = Agent Queue panel
+// Tools = Email Scan + Slack Scan + Smart Sync
+
+function isMobile(){ return window.innerWidth <= 768; }
+
+function switchMobileTab(tab, btn){
+  // Update nav active state
+  document.querySelectorAll('.mobile-nav-item').forEach(t => t.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+
+  const mainCol = document.querySelector('.main-col');
+  const dashPanel = document.getElementById('panel-dashboard');
+  const otherPanels = document.getElementById('other-panels');
+  const allPanels = document.querySelectorAll('#other-panels .panel');
+  const mobCalView = document.getElementById('mob-cal-view');
+  const mobToolsView = document.getElementById('mob-tools-view');
+
+  // Hide all mobile-specific views first
+  if(mobCalView) mobCalView.classList.remove('active');
+  if(mobToolsView) mobToolsView.classList.remove('active');
+
+  // Hide the desktop center col and sidebar on mobile tasks view
+  const centerCol = dashPanel?.querySelector('.main-col > div:nth-child(2), [id^="cal-view"]')?.closest('[style*="border-right"]');
+  const desktopCenterCol = document.querySelector('#panel-dashboard > div > div:nth-child(2)');
+  const desktopSidebar = document.querySelector('.main-sidebar');
+
+  if(tab === 'tasks'){
+    // Show dashboard, hide center calendar column and sidebar
+    if(dashPanel){ dashPanel.style.display = 'flex'; }
+    if(otherPanels){ otherPanels.style.display = 'none'; }
+    if(desktopCenterCol) desktopCenterCol.classList.add('mob-hide');
+    if(desktopSidebar) desktopSidebar.classList.add('mob-hide');
+    render(); renderFaye(); renderAaron(); updateBadges();
+
+  } else if(tab === 'calendar'){
+    // Show mobile calendar view full screen
+    if(dashPanel){ dashPanel.style.display = 'none'; }
+    if(otherPanels){ otherPanels.style.display = 'none'; }
+    if(desktopCenterCol) desktopCenterCol.classList.remove('mob-hide');
+    if(desktopSidebar) desktopSidebar.classList.add('mob-hide');
+    if(mobCalView) mobCalView.classList.add('active');
+    // Render all calendars into mobile view
+    renderMobileCalendar();
+
+  } else if(tab === 'agent'){
+    // Show agent panel
+    if(dashPanel){ dashPanel.style.display = 'none'; }
+    if(otherPanels){ otherPanels.style.display = 'block'; otherPanels.style.flex = '1'; }
+    allPanels.forEach(p => p.classList.remove('active'));
+    const agentPanel = document.getElementById('panel-agent');
+    if(agentPanel) agentPanel.classList.add('active');
+    renderAgentPanel();
+    // Clean up mob-hide
+    if(desktopCenterCol) desktopCenterCol.classList.remove('mob-hide');
+    if(desktopSidebar) desktopSidebar.classList.remove('mob-hide');
+
+  } else if(tab === 'tools'){
+    // Show mobile tools view
+    if(dashPanel){ dashPanel.style.display = 'none'; }
+    if(otherPanels){ otherPanels.style.display = 'none'; }
+    if(mobToolsView) mobToolsView.classList.add('active');
+    if(desktopCenterCol) desktopCenterCol.classList.remove('mob-hide');
+    if(desktopSidebar) desktopSidebar.classList.remove('mob-hide');
+  }
+}
+
+function renderMobileCalendar(){
+  // Mirror the desktop All calendar view into the mobile calendar tab
+  const mobContent = document.getElementById('mob-all-cal');
+  const allCal = document.getElementById('all-cal');
+  if(mobContent && allCal){
+    mobContent.innerHTML = allCal.innerHTML || `<div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--t3);padding:12px;">Loading calendar\u2026</div>`;
+  }
+  // Also trigger a fresh load if needed
+  if(!allCal?.innerHTML?.trim()) loadCalendars();
+}
+
+// On mobile, default to Tasks tab on load
+window.addEventListener('DOMContentLoaded', () => {
+  if(isMobile()){
+    const tasksBtn = document.getElementById('mob-tab-tasks');
+    if(tasksBtn) switchMobileTab('tasks', tasksBtn);
+  }
+});
+
 function switchTab(tab,btn){
   // Update rail nav active state
   document.querySelectorAll('.rail-nav-item').forEach(t=>t.classList.remove('active'));
@@ -2874,7 +3048,7 @@ async function _readFileContent(file) {
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
-    const r = await fetch('/api/ask-image', {
+    const r = await fetch('/api/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -4142,7 +4316,7 @@ async function runSmartSync(){
     status.textContent = 'Checking Gmail…';
     const [gmailRes, slackRes] = await Promise.allSettled([
       fetch('/api/gmail-scan', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quick: true}) }),
-      fetch('/api/slack-scan', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({dashboardState: S}) })
+      fetch('/api/slack-scan', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({action:'queue', dashboardState: S}) })
     ]);
 
     const found = [];
@@ -4376,7 +4550,7 @@ async function loadAgentQueue(){
   if(execWrap) execWrap.style.display = 'none';
 
   try {
-    const r = await fetch('/api/agent-queue', {
+    const r = await fetch('/api/agent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ dashboardState: S })
@@ -4604,10 +4778,10 @@ async function executeAgentItem(item){
 
   if(item.tool === 'draft_email' || item.tool === 'calendar_event' || item.tool === 'slack_message'){
     // These require a server-side API call — send to a dedicated execute endpoint
-    const r = await fetch('/api/agent-execute', {
+    const r = await fetch('/api/agent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ item })
+      body: JSON.stringify({ action:'execute', item })
     });
     if(!r.ok) throw new Error(`Execute failed: ${r.status}`);
     return;
