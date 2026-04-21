@@ -1461,6 +1461,33 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
           <div class="m-drop-txt">📎 Drop Faye export or click to browse</div>
           <div class="m-drop-sub">CSV · JSON · TXT · XLSX</div>
         </div>
+        <!-- Screenshot upload for Faye tasks -->
+        <div style="margin-top:6px;">
+          <label style="display:flex;align-items:center;gap:8px;border:1px dashed var(--bm);border-radius:3px;padding:8px 12px;cursor:pointer;transition:all .2s;background:var(--s3);" onmouseover="this.style.borderColor='var(--rose)';this.style.background='rgba(184,50,72,.06)'" onmouseout="this.style.borderColor='var(--bm)';this.style.background='var(--s3)'">
+            <input type="file" accept="image/*,.heic,.heif" style="display:none;" onchange="handleFayeScreenshot(event)" id="faye-screenshot-upload" />
+            <span style="font-size:15px;">📸</span>
+            <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);letter-spacing:.06em;text-transform:uppercase;">Upload screenshot → Claude reads Faye tasks from it</span>
+          </label>
+          <div id="faye-screenshot-loading" style="display:none;text-align:center;padding:8px 0;">
+            <div class="thinking"><span></span><span></span><span></span></div>
+            <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);margin-top:4px;">Reading screenshot for Faye tasks…</div>
+          </div>
+          <!-- Client selector — shown after screenshot is read -->
+          <div id="faye-screenshot-client-row" style="display:none;margin-top:8px;padding:8px 10px;background:var(--s2);border:1px solid var(--bm);border-radius:3px;">
+            <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);margin-bottom:6px;">Which client is this for?</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;" id="faye-screenshot-client-btns">
+              <button onclick="setFayeScreenshotClient('doherty',this)" class="faye-ss-btn" style="font-family:'DM Mono',monospace;font-size:9px;padding:4px 10px;border-radius:3px;border:1px solid var(--bm);background:var(--surface);color:var(--t3);cursor:pointer;">Doherty</button>
+              <button onclick="setFayeScreenshotClient('garcia',this)" class="faye-ss-btn" style="font-family:'DM Mono',monospace;font-size:9px;padding:4px 10px;border-radius:3px;border:1px solid var(--bm);background:var(--surface);color:var(--t3);cursor:pointer;">Garcia-Huang</button>
+              <button onclick="setFayeScreenshotClient('morrell',this)" class="faye-ss-btn" style="font-family:'DM Mono',monospace;font-size:9px;padding:4px 10px;border-radius:3px;border:1px solid var(--bm);background:var(--surface);color:var(--t3);cursor:pointer;">Morrell</button>
+              <button onclick="setFayeScreenshotClient('holiday',this)" class="faye-ss-btn" style="font-family:'DM Mono',monospace;font-size:9px;padding:4px 10px;border-radius:3px;border:1px solid var(--bm);background:var(--surface);color:var(--t3);cursor:pointer;">Holiday</button>
+              <button onclick="setFayeScreenshotClient('white',this)" class="faye-ss-btn" style="font-family:'DM Mono',monospace;font-size:9px;padding:4px 10px;border-radius:3px;border:1px solid var(--bm);background:var(--surface);color:var(--t3);cursor:pointer;">White</button>
+              <button onclick="setFayeScreenshotClient('browdy',this)" class="faye-ss-btn" style="font-family:'DM Mono',monospace;font-size:9px;padding:4px 10px;border-radius:3px;border:1px solid var(--bm);background:var(--surface);color:var(--t3);cursor:pointer;">Browdy Weiner</button>
+              <button onclick="setFayeScreenshotClient('rhodes',this)" class="faye-ss-btn" style="font-family:'DM Mono',monospace;font-size:9px;padding:4px 10px;border-radius:3px;border:1px solid var(--bm);background:var(--surface);color:var(--t3);cursor:pointer;">Rhodes</button>
+              <button onclick="setFayeScreenshotClient(null,this)" class="faye-ss-btn" style="font-family:'DM Mono',monospace;font-size:9px;padding:4px 10px;border-radius:3px;border:1px solid var(--bm);background:var(--surface);color:var(--t3);cursor:pointer;">Auto-detect</button>
+            </div>
+          </div>
+          <div id="faye-screenshot-status" style="display:none;font-family:'DM Mono',monospace;font-size:10px;margin-top:5px;padding:6px 10px;border-radius:2px;"></div>
+        </div>
         <div class="m-loaded" id="m-faye-loaded"></div>
         <textarea class="m-ta" id="m-faye-txt" placeholder="Paste or type any new/updated Faye tasks — include client name so Claude sorts by family. If you had a Garcia-Huang or Holiday sync today, note any deadlines or decisions from it." style="margin-top:8px;min-height:60px;"></textarea>
       </div>
@@ -2408,6 +2435,129 @@ function toggleAgentHistory(){
   }).join('');
   panel.style.display = 'block';
 }
+
+// ── FAYE SCREENSHOT UPLOAD (Morning Intake) ────────────────────────────────
+let _fayeScreenshotClient = null;      // null = auto-detect from text
+let _fayeScreenshotExtracted = '';     // raw text from the screenshot
+
+function setFayeScreenshotClient(clientId, btn){
+  _fayeScreenshotClient = clientId;
+  // Highlight selected button
+  document.querySelectorAll('.faye-ss-btn').forEach(b => {
+    b.style.background = 'var(--surface)';
+    b.style.color = 'var(--t3)';
+    b.style.borderColor = 'var(--bm)';
+  });
+  if(btn){
+    btn.style.background = 'var(--rose-d, rgba(184,50,72,.12))';
+    btn.style.color = 'var(--rose)';
+    btn.style.borderColor = 'var(--rose)';
+  }
+  // If we already have extracted text, append it to the Faye textarea with client context
+  if(_fayeScreenshotExtracted){
+    const clientLabel = clientId
+      ? CLIENTS.find(c=>c.id===clientId)?.label || clientId
+      : '(auto-detect client)';
+    const textarea = document.getElementById('m-faye-txt');
+    const existing = textarea.value.trim();
+    const block = `--- From screenshot [${clientLabel}] ---
+${_fayeScreenshotExtracted}`;
+    textarea.value = existing ? `${existing}
+
+${block}` : block;
+    const status = document.getElementById('faye-screenshot-status');
+    if(status){
+      status.style.display = 'block';
+      status.style.color = 'var(--sage)';
+      status.textContent = `✓ Added to Faye tasks as ${clientLabel}`;
+      setTimeout(()=>{ status.style.display='none'; }, 3000);
+    }
+    // Reset for next upload
+    _fayeScreenshotExtracted = '';
+    document.getElementById('faye-screenshot-client-row').style.display = 'none';
+  }
+}
+
+async function handleFayeScreenshot(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  event.target.value = '';
+
+  const loading = document.getElementById('faye-screenshot-loading');
+  const status  = document.getElementById('faye-screenshot-status');
+  const clientRow = document.getElementById('faye-screenshot-client-row');
+
+  if(loading) loading.style.display = 'block';
+  if(status)  status.style.display  = 'none';
+  if(clientRow) clientRow.style.display = 'none';
+  _fayeScreenshotExtracted = '';
+
+  try {
+    // Use vision API to extract text from the image
+    const extracted = await _readFileContent(file);
+
+    if(loading) loading.style.display = 'none';
+
+    if(!extracted.trim()){
+      if(status){
+        status.style.display = 'block';
+        status.style.color = 'var(--rose)';
+        status.textContent = 'Could not read screenshot — try a clearer image.';
+      }
+      return;
+    }
+
+    // Store extracted text and show client selector
+    _fayeScreenshotExtracted = extracted;
+
+    // Try to auto-detect the client from the extracted text
+    let autoDetected = null;
+    const lower = extracted.toLowerCase();
+    for(const c of CLIENTS){
+      if(lower.includes(c.label.toLowerCase()) || lower.includes(c.id.toLowerCase())){
+        autoDetected = c.id;
+        break;
+      }
+    }
+
+    if(autoDetected){
+      // Auto-detected — append directly with the detected client
+      const clientLabel = CLIENTS.find(c=>c.id===autoDetected)?.label || autoDetected;
+      const textarea = document.getElementById('m-faye-txt');
+      const existing = textarea.value.trim();
+      const block = `--- From screenshot [${clientLabel} — auto-detected] ---
+${extracted}`;
+      textarea.value = existing ? `${existing}
+
+${block}` : block;
+      _fayeScreenshotExtracted = '';
+      if(status){
+        status.style.display = 'block';
+        status.style.color = 'var(--sage)';
+        status.textContent = `✓ Added to Faye tasks · auto-detected: ${clientLabel}`;
+        setTimeout(()=>{ status.style.display='none'; }, 3000);
+      }
+    } else {
+      // No client detected — show selector for user to pick
+      if(clientRow) clientRow.style.display = 'block';
+      if(status){
+        status.style.display = 'block';
+        status.style.color = 'var(--amber)';
+        status.textContent = 'Screenshot read — select the client above to add it to Faye tasks.';
+      }
+    }
+
+  } catch(e) {
+    if(loading) loading.style.display = 'none';
+    if(status){
+      status.style.display = 'block';
+      status.style.color = 'var(--rose)';
+      status.textContent = 'Could not read screenshot — try again.';
+    }
+    console.error('Faye screenshot error:', e);
+  }
+}
+// ────────────────────────────────────────────────────────────────────────────
 // ── MOBILE TAB SWITCHING ──
 // 4-tab mobile nav: Tasks | Calendar | Agent | Tools
 // Tasks = My Priorities full height (center calendar col + sidebar hidden)
@@ -4837,7 +4987,7 @@ function updateDrawerPriorityBtns(){
 }
 
 function saveTaskDrawer(){
-  const id = parseInt(document.getElementById('td-task-id').value);
+  const id = parseFloat(document.getElementById('td-task-id').value);
   const type = document.getElementById('td-task-type').value;
   let t;
   if(type==='main') t = S.tasks.find(t=>t.id===id);
@@ -4889,7 +5039,7 @@ function saveTaskDrawer(){
 }
 
 function deleteFromDrawer(){
-  const id = parseInt(document.getElementById('td-task-id').value);
+  const id = parseFloat(document.getElementById('td-task-id').value);
   const type = document.getElementById('td-task-type').value;
   if(type==='main'){ S.tasks=S.tasks.filter(t=>t.id!==id); render(); }
   else if(type==='faye'){ S.fayeTasks=S.fayeTasks.filter(t=>t.id!==id); render(); renderFaye(); }
