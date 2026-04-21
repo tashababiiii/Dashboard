@@ -832,7 +832,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
         <input class="capture-pill-inp" id="cap-txt" placeholder="Quick capture…" onkeydown="if(event.key==='Enter'){event.preventDefault();parseCap();}" />
         <select class="capture-pill-sel" id="cap-tag"><option value="aaron">Ops</option><option value="strategic">Strategic</option><option value="faye">Faye</option><option value="645">Office</option><option value="personal">Personal</option></select>
         <button class="capture-pill-btn" onclick="parseCap()">Parse →</button>
-        <label class="capture-pill-img" title="Upload file or paste Google Doc link">📎<input type="file" accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx,.md" style="display:none;" onchange="handleFileCapture(event)" id="file-upload" /></label>
+        <label class="capture-pill-img" title="Upload file or paste Google Doc link">📎<input type="file" accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx,.md,.heic,.heif" style="display:none;" onchange="handleFileCapture(event)" id="file-upload" /></label>
       </div>
     </div>
 
@@ -1431,7 +1431,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
         <!-- Screenshot upload -->
         <div style="margin-top:6px;">
           <label style="display:flex;align-items:center;gap:8px;border:1px dashed var(--bm);border-radius:3px;padding:8px 12px;cursor:pointer;transition:all .2s;background:var(--s3);" onmouseover="this.style.borderColor='var(--gold)';this.style.background='var(--gold-d)'" onmouseout="this.style.borderColor='var(--bm)';this.style.background='var(--s3)'">
-            <input type="file" accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx,.md" style="display:none;" onchange="handleMorningFile(event)" id="morning-file-upload" />
+            <input type="file" accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx,.md,.heic,.heif" style="display:none;" onchange="handleMorningFile(event)" id="morning-file-upload" />
             <span style="font-size:15px;">📎</span>
             <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);letter-spacing:.06em;text-transform:uppercase;">Upload file or screenshot → Claude reads it into Brain Dump</span>
           </label>
@@ -3619,7 +3619,13 @@ function _isTextFile(file) {
 }
 
 function _isImageFile(file) {
-  return file.type.startsWith('image/');
+  if (file.type.startsWith('image/')) return true;
+  const name = file.name.toLowerCase();
+  const imageExts = ['.jpg','.jpeg','.png','.gif','.webp','.heic','.heif','.bmp','.tiff'];
+  if (imageExts.some(e => name.endsWith(e))) return true;
+  if (name.startsWith('img_') || name.startsWith('image') || name.startsWith('photo')) return true;
+  if ((!file.type || file.type === 'application/octet-stream') && !_isHeavyDoc(file) && !_isTextFile(file)) return true;
+  return false;
 }
 
 function _isHeavyDoc(file) {
@@ -3653,7 +3659,7 @@ async function _readFileContent(file) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         image: base64,
-        mediaType: file.type || 'image/jpeg',
+        mediaType: (file.type && file.type.startsWith('image/')) ? file.type : 'image/jpeg',
         prompt: 'Read this image and extract ALL text content — tasks, notes, reminders, to-dos, messages, lists, anything written. Return only the raw extracted text, no commentary.'
       })
     });
