@@ -1561,6 +1561,9 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
       </div>
       <button class="m-submit" id="m-morning-submit" onclick="runIntake()">Parse everything & start my day →</button>
       <div class="m-resp" id="m-morning-resp"><div class="m-resp-lbl">↳ Claude</div><div class="m-resp-txt" id="m-morning-resp-txt"></div></div>
+      <div id="m-close-row" style="display:none;margin-top:12px;text-align:center;">
+        <button onclick="closeModal('morning')" style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:9px 24px;background:var(--gold);color:#fff;border:none;border-radius:3px;cursor:pointer;">Start my day ✓</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1603,6 +1606,9 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
       </div>
       <button class="m-submit" style="background:var(--teal);" id="e-submit" onclick="runEveningWrapup()">Close out the day →</button>
       <div class="m-resp" id="e-resp"><div class="m-resp-lbl">↳ Claude</div><div class="m-resp-txt" id="e-resp-txt"></div></div>
+      <div id="e-close-row" style="display:none;margin-top:12px;text-align:center;">
+        <button onclick="closeModal('evening')" style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:9px 24px;background:var(--teal);color:#fff;border:none;border-radius:3px;cursor:pointer;">Close when ready ✕</button>
+      </div>
     </div>
   </div>
 </div>
@@ -4609,7 +4615,9 @@ async function runIntake(){
   }
   rtxt.textContent=`Morning intake complete. ${total>0?`Added ${total} tasks across your workspaces. `:''}${focus?`Focus set. `:''}Calendars loaded. You're set up for the day.`;
   btn.disabled=false;
-  setTimeout(()=>closeModal('morning'),2600);
+  // Show manual close button — don't auto-dismiss
+  const mCloseRow = document.getElementById('m-close-row');
+  if(mCloseRow) mCloseRow.style.display = 'block';
 }
 
 // WEEKLY PLAN
@@ -4654,7 +4662,9 @@ async function runEveningWrapup(){
   }catch(e){rtxt.textContent='Day closed out. Good work today.';}
   btn.disabled=false;
   _logCheckinHistory(); // save EOD check-in to history
-  setTimeout(()=>closeModal('evening'),3000);
+  // Show a manual close button — no auto-close so Natasha can read the summary
+  const closeRow = document.getElementById('e-close-row');
+  if(closeRow) closeRow.style.display = 'block';
 }
 
 // ── DELEGATION LOG ──
