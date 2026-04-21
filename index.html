@@ -1550,6 +1550,15 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
       </div>
 
       <div><div class="m-sec">Today's Focus</div><input class="m-inp m-focus-inp" id="m-focus" placeholder="What makes today a win?" /></div>
+      <!-- Capacity check-in -->
+      <div style="margin-bottom:12px;padding:12px 14px;background:var(--s2);border:1px solid var(--bm);border-radius:4px;">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);margin-bottom:8px;">How does today feel? <span style="color:var(--t3);font-size:8px;">(optional)</span></div>
+        <div style="display:flex;gap:6px;">
+          <button id="mc-light"  onclick="setMorningCheckin('light',this)"  style="flex:1;padding:8px 4px;border-radius:3px;border:1px solid var(--bm);background:var(--surface);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;transition:all .15s;">🟢 Light</button>
+          <button id="mc-normal" onclick="setMorningCheckin('normal',this)" style="flex:1;padding:8px 4px;border-radius:3px;border:1px solid var(--bm);background:var(--surface);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;transition:all .15s;">🟡 Normal</button>
+          <button id="mc-heavy"  onclick="setMorningCheckin('heavy',this)"  style="flex:1;padding:8px 4px;border-radius:3px;border:1px solid var(--bm);background:var(--surface);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;transition:all .15s;">🔴 Heavy</button>
+        </div>
+      </div>
       <button class="m-submit" id="m-morning-submit" onclick="runIntake()">Parse everything & start my day →</button>
       <div class="m-resp" id="m-morning-resp"><div class="m-resp-lbl">↳ Claude</div><div class="m-resp-txt" id="m-morning-resp-txt"></div></div>
     </div>
@@ -1583,6 +1592,15 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
       <div><div class="m-sec">What's rolling to tomorrow or this week?</div><textarea class="m-ta" id="e-roll" placeholder="Unfinished tasks that need to move — Claude will update them…" style="min-height:60px;"></textarea></div>
       <div><div class="m-sec">Anything to remember that won't be on a calendar?</div><textarea class="m-ta" id="e-remember" placeholder="A conversation that matters, a commitment made verbally, something you promised…" style="min-height:60px;"></textarea></div>
       <div><div class="m-sec">One intention for tomorrow</div><input class="m-inp m-focus-inp" id="e-tomorrow" placeholder="What's the first thing I'm doing when I sit down tomorrow?" /></div>
+      <!-- EOD capacity check-in -->
+      <div style="margin-bottom:12px;padding:12px 14px;background:var(--s2);border:1px solid var(--bm);border-radius:4px;">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);margin-bottom:8px;">How did today actually feel? <span style="color:var(--t3);font-size:8px;">(optional)</span></div>
+        <div style="display:flex;gap:6px;">
+          <button id="ec-light"  onclick="setEODCheckin('light',this)"  style="flex:1;padding:8px 4px;border-radius:3px;border:1px solid var(--bm);background:var(--surface);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;transition:all .15s;">🟢 Light</button>
+          <button id="ec-normal" onclick="setEODCheckin('normal',this)" style="flex:1;padding:8px 4px;border-radius:3px;border:1px solid var(--bm);background:var(--surface);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;transition:all .15s;">🟡 Normal</button>
+          <button id="ec-heavy"  onclick="setEODCheckin('heavy',this)"  style="flex:1;padding:8px 4px;border-radius:3px;border:1px solid var(--bm);background:var(--surface);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;transition:all .15s;">🔴 Heavy</button>
+        </div>
+      </div>
       <button class="m-submit" style="background:var(--teal);" id="e-submit" onclick="runEveningWrapup()">Close out the day →</button>
       <div class="m-resp" id="e-resp"><div class="m-resp-lbl">↳ Claude</div><div class="m-resp-txt" id="e-resp-txt"></div></div>
     </div>
@@ -1855,6 +1873,9 @@ let S={
   delegations:[],
   waitingItems:[],
   focus:'',doneToday:0,capacity:70,capacityCeiling:40,capacityOverride:false,
+  capacityCheckins:[],
+  morningCheckin:null,
+  eodCheckin:null,
   hz:'today',fhz:'today',ahz:'today',ws:'all',
   fayeOpen:{doherty:true,garcia:true,morrell:true,holiday:true,white:true,browdy:true,rhodes:true},
   completedMetrics:{total:0,by645:0,byFaye:0,byPersonal:0,byAaron:0,byStrategic:0,byOffice:0,log:[]},
@@ -2376,6 +2397,36 @@ function renderMetricsPage(){
       </div>
     </div>
 
+    <!-- ── CAPACITY CHECK-IN HISTORY ── -->
+    <div style="padding:18px 20px;border-bottom:1px solid var(--b);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);">Capacity Check-In History — Last 14 Days</div>
+        <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--t3);">Formula vs felt load</div>
+      </div>
+      ${(()=>{
+        const log = (S.capacityCheckins||[]).slice(-14).reverse();
+        if(!log.length) return `<div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);">No check-ins yet — rate your day in the Morning Intake or EOD Wind-Down to start tracking.</div>`;
+        const icons = { light:'🟢', normal:'🟡', heavy:'🔴' };
+        const labels = { light:'Light', normal:'Normal', heavy:'Heavy' };
+        return `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">
+          ${log.map(entry => {
+            const d = new Date(entry.date);
+            const dayStr = d.toLocaleDateString('en-US',{weekday:'short'});
+            const dateStr = d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+            const m = entry.morning;
+            const e = entry.eod;
+            return `<div style="text-align:center;padding:8px 4px;background:var(--surface);border:1px solid var(--b);border-radius:3px;">
+              <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--t3);">${dayStr}</div>
+              <div style="font-family:'DM Mono',monospace;font-size:7px;color:var(--t3);margin-bottom:4px;">${dateStr}</div>
+              ${m ? `<div title="Morning: ${labels[m]}" style="font-size:12px;">☀${icons[m]||'—'}</div>` : '<div style="font-size:10px;color:var(--t3);">☀—</div>'}
+              ${e ? `<div title="EOD: ${labels[e]}" style="font-size:12px;">◑${icons[e]||'—'}</div>` : '<div style="font-size:10px;color:var(--t3);">◑—</div>'}
+              ${entry.formula!=null ? `<div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--t3);margin-top:2px;">${entry.formula}%</div>` : ''}
+            </div>`;
+          }).join('')}
+        </div>`;
+      })()}
+    </div>
+
     <!-- ── RECENT COMPLETIONS LOG ── -->
     <div style="padding:18px 20px;">
       <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);margin-bottom:14px;">Recent Completions</div>
@@ -2553,6 +2604,104 @@ ${block}` : block;
   }
 }
 // ────────────────────────────────────────────────────────────────────────────
+
+// ── CAPACITY CHECK-IN ────────────────────────────────────────────────────────
+// Light=30%, Normal=65%, Heavy=100% as the felt-load anchor
+const CHECKIN_VALS = { light: 30, normal: 65, heavy: 100 };
+const CHECKIN_COLORS = { light: 'var(--sage)', normal: 'var(--amber)', heavy: 'var(--rose)' };
+const CHECKIN_ICONS = { light: '🟢', normal: '🟡', heavy: '🔴' };
+
+function _styleCheckinBtns(prefix, selected){
+  ['light','normal','heavy'].forEach(v => {
+    const btn = document.getElementById(`${prefix}-${v}`);
+    if(!btn) return;
+    const isActive = v === selected;
+    btn.style.background   = isActive ? (v==='light'?'rgba(21,122,64,.15)':v==='normal'?'rgba(200,130,0,.15)':'rgba(184,50,72,.15)') : 'var(--surface)';
+    btn.style.borderColor  = isActive ? CHECKIN_COLORS[v] : 'var(--bm)';
+    btn.style.color        = isActive ? CHECKIN_COLORS[v] : 'var(--t3)';
+    btn.style.fontWeight   = isActive ? '600' : '400';
+  });
+}
+
+function setMorningCheckin(val, btn){
+  S.morningCheckin = val;
+  save();
+  _styleCheckinBtns('mc', val);
+  // Apply blend immediately so capacity meter updates on the spot
+  _applyCheckinBlend();
+}
+
+function setEODCheckin(val, btn){
+  S.eodCheckin = val;
+  save();
+  _styleCheckinBtns('ec', val);
+  // Log this to the history when EOD is saved (called from runEveningWrapup)
+  _applyCheckinBlend();
+}
+
+// Blend formula: 60% task-load + 40% felt-load
+// Only applies if a morning check-in exists for today
+function _applyCheckinBlend(){
+  const checkin = S.morningCheckin || S.eodCheckin;
+  if(!checkin) return; // no check-in — use raw formula
+
+  const formula = calcAutoCapacity();
+  const felt    = CHECKIN_VALS[checkin] || 65;
+  const blended = Math.round((formula * 0.6) + (felt * 0.4));
+  const capped  = Math.min(130, Math.max(0, blended));
+
+  if(!S.capacityOverride){
+    S.capacity = capped;
+    save();
+    renderCapacityUI(capped);
+  }
+}
+
+// Called by autoUpdateCapacity — applies blend if check-in exists
+// (autoUpdateCapacity already calls calcAutoCapacity, so we just re-blend on top)
+function _blendedCapacity(){
+  const checkin = S.morningCheckin || S.eodCheckin;
+  if(!checkin) return calcAutoCapacity(); // no check-in — pure formula
+  const formula = calcAutoCapacity();
+  const felt    = CHECKIN_VALS[checkin] || 65;
+  return Math.min(130, Math.round((formula * 0.6) + (felt * 0.4)));
+}
+
+// Log both morning and EOD to the history array (called when EOD modal is submitted)
+function _logCheckinHistory(){
+  const today = new Date().toDateString();
+  if(!S.capacityCheckins) S.capacityCheckins = [];
+  // Update or create today's entry
+  const existing = S.capacityCheckins.find(c => c.date === today);
+  if(existing){
+    if(S.morningCheckin) existing.morning = S.morningCheckin;
+    if(S.eodCheckin)     existing.eod     = S.eodCheckin;
+  } else {
+    S.capacityCheckins.push({
+      date:    today,
+      morning: S.morningCheckin || null,
+      eod:     S.eodCheckin     || null,
+      formula: calcAutoCapacity()
+    });
+  }
+  // Keep last 90 days
+  if(S.capacityCheckins.length > 90) S.capacityCheckins = S.capacityCheckins.slice(-90);
+  save();
+}
+
+// Reset morning check-in daily — called on page load
+function _resetDailyCheckin(){
+  const today = new Date().toDateString();
+  const lastCheckin = S.capacityCheckins?.[S.capacityCheckins.length - 1];
+  if(lastCheckin && lastCheckin.date !== today){
+    // New day — clear the transient morning/eod fields
+    S.morningCheckin = null;
+    S.eodCheckin     = null;
+    save();
+  }
+}
+// ────────────────────────────────────────────────────────────────────────────
+
 // ── MOBILE TAB SWITCHING ──
 // 4-tab mobile nav: Tasks | Calendar | Agent | Tools
 // Tasks = My Priorities full height (center calendar col + sidebar hidden)
@@ -2841,7 +2990,7 @@ function updateCapacity(v){
 function autoUpdateCapacity(){
   // Called after any task change — updates capacity unless user has overridden
   if(S.capacityOverride) return;
-  const auto = calcAutoCapacity();
+  const auto = _blendedCapacity();
   S.capacity = auto;
   save();
   renderCapacityUI(auto);
@@ -4418,6 +4567,8 @@ async function processFile(file,type){
 function openModal(type){
   document.getElementById(`modal-${type}`).classList.add('open');
   if(type==='morning')loadAsanaTasksForMorning();
+  if(type==='morning'){ _resetDailyCheckin(); if(S.morningCheckin) _styleCheckinBtns('mc', S.morningCheckin); }
+  if(type==='evening'){ if(S.eodCheckin) _styleCheckinBtns('ec', S.eodCheckin); }
 }
 function closeModal(type){document.getElementById(`modal-${type}`).classList.remove('open');}
 ['morning','weekly','evening','iop','iop-grade'].forEach(t=>{
@@ -4502,6 +4653,7 @@ async function runEveningWrapup(){
     S.doneToday=0;save();metrics();
   }catch(e){rtxt.textContent='Day closed out. Good work today.';}
   btn.disabled=false;
+  _logCheckinHistory(); // save EOD check-in to history
   setTimeout(()=>closeModal('evening'),3000);
 }
 
@@ -5923,6 +6075,7 @@ loadFocus(); metrics(); updateBadges();
 if(S.capacityOverride){ renderCapacityUI(S.capacity); } else { autoUpdateCapacity(); }
 // cap-slider removed
 renderSparkline();
+_resetDailyCheckin();
 loadCalendars(); setInterval(loadCalendars, 30*60*1000);
 
 // Restore saved workspace and column visibility
