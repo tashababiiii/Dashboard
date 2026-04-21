@@ -176,7 +176,7 @@ module.exports = async (req, res) => {
       return res.status(401).json({ error: 'Token expired', needsAuth: true });
     }
     if (error.code === 403) {
-      return res.status(403).json({ error: 'No access to this file. Make sure it is shared with your account.' });
+      return res.status(403).json({ error: 'Google Drive access denied. Try signing out and back in — Drive access may need to be re-authorized.' });
     }
     return res.status(500).json({ error: 'Could not parse document' });
   }

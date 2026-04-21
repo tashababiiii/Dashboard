@@ -192,7 +192,17 @@ async function handleExecute(body, req, res) {
       sanitize(d.body || '', 10000)
     ].join('\r\n')).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     await gmail.users.drafts.create({ userId: 'me', requestBody: { message: { raw } } });
-    return res.status(200).json({ success: true, action: 'draft_email' });
+    return res.status(200).json({
+      success: true,
+      action: 'draft_email',
+      receipt: {
+        to: d.to,
+        subject: d.subject || '(no subject)',
+        bodyPreview: (d.body || '').slice(0, 200),
+        draftedAt: new Date().toISOString(),
+        note: 'Saved to Gmail Drafts — review and send from Gmail'
+      }
+    });
   }
 
   if (item.tool === 'calendar_event') {
@@ -216,7 +226,18 @@ async function handleExecute(body, req, res) {
         end: { dateTime: endDateTime.toISOString(), timeZone: 'America/New_York' }
       }
     });
-    return res.status(200).json({ success: true, action: 'calendar_event' });
+    return res.status(200).json({
+      success: true,
+      action: 'calendar_event',
+      receipt: {
+        title: d.title || 'New Event',
+        date: d.date,
+        time: d.time || '09:00',
+        duration: d.duration_min || 30,
+        calendar: calendarId,
+        createdAt: new Date().toISOString()
+      }
+    });
   }
 
   if (item.tool === 'slack_message') {
@@ -227,6 +248,7 @@ async function handleExecute(body, req, res) {
     if (!channelId) return res.status(400).json({ error: `Unknown Slack channel: ${d.channel}` });
     const messageText = sanitize(d.message || '', 3000);
     if (!messageText) return res.status(400).json({ error: 'Empty message' });
+    // Post message to Slack
     const msgRes = await fetch('https://slack.com/api/chat.postMessage', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -234,7 +256,18 @@ async function handleExecute(body, req, res) {
     });
     const msgData = await msgRes.json();
     if (!msgData.ok) throw new Error(`Slack error: ${msgData.error}`);
-    return res.status(200).json({ success: true, action: 'slack_message' });
+    // Return full receipt so dashboard can show confirmation
+    return res.status(200).json({
+      success: true,
+      action: 'slack_message',
+      receipt: {
+        channel: d.channel || channelId,
+        channelId,
+        message: messageText,
+        ts: msgData.ts,
+        sentAt: new Date().toISOString()
+      }
+    });
   }
 
   // add_task and log_delegation are client-side
