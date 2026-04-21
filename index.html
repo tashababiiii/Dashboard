@@ -5430,15 +5430,39 @@ async function runSmartSync(){
     _smartSyncItems = found;
     status.textContent = `${found.length} item${found.length>1?'s':''} · ${timeStr}`;
 
-    results.innerHTML = found.map((item,i)=>`
-      <div id="ss-${i}" style="display:flex;align-items:flex-start;gap:8px;padding:7px 9px;background:var(--s2);border-radius:3px;border:1px solid var(--b);margin-bottom:3px;">
-        <input type="checkbox" data-idx="${i}" checked style="margin-top:2px;accent-color:var(--sage);flex-shrink:0;cursor:pointer;" />
+    // Try to match each surfaced item to an existing dashboard task
+    found.forEach(item => {
+      const title = item.title || item.subject || item.action || '';
+      const allTasks = [
+        ...S.tasks.filter(t=>!t.done).map(t=>({...t,_type:'main'})),
+        ...S.fayeTasks.filter(t=>!t.done).map(t=>({...t,_type:'faye'})),
+        ...S.aaronTasks.filter(t=>!t.done).map(t=>({...t,_type:'aaron'}))
+      ];
+      // Fuzzy match against existing tasks
+      const match = allTasks.find(t => {
+        const nt = _normTitle(t.title), ni = _normTitle(title);
+        return nt === ni || (ni.length>=6 && (nt.includes(ni)||ni.includes(nt)));
+      });
+      item._matchedTask = match || null;
+    });
+
+    results.innerHTML = found.map((item,i) => {
+      const isMatch = !!item._matchedTask;
+      const title = item.title||item.subject||item.action||'Item';
+      const source = item._source==='email'?'✉':'💬';
+      const reason = item.reason||item.summary||'';
+      return `<div id="ss-${i}" style="display:flex;align-items:flex-start;gap:8px;padding:7px 9px;background:var(--s2);border-radius:3px;border:1px solid ${isMatch?'var(--sage)':'var(--b)'};margin-bottom:3px;">
+        <input type="checkbox" data-idx="${i}" data-mode="${isMatch?'done':'none'}" ${isMatch?'checked':''} style="margin-top:2px;accent-color:var(--sage);flex-shrink:0;cursor:pointer;" />
         <div style="flex:1;min-width:0;">
-          <div style="font-size:11px;color:var(--t);margin-bottom:2px;font-family:'Jost',sans-serif;">${item.title||item.subject||'Item'}</div>
-          <div style="font-size:9px;color:var(--t3);font-family:'DM Mono',monospace;">${item._source==='email'?'✉':'💬'} ${item.reason||item.summary||''}</div>
+          <div style="font-size:11px;color:var(--t);margin-bottom:2px;font-family:'Jost',sans-serif;">${title}</div>
+          <div style="font-size:9px;font-family:'DM Mono',monospace;display:flex;align-items:center;gap:6px;">
+            <span style="color:var(--t3);">${source} ${reason}</span>
+            ${isMatch ? `<span style="color:var(--sage);font-size:8px;letter-spacing:.04em;">● matches: ${item._matchedTask.title.slice(0,30)}</span>` : `<span style="color:var(--t3);font-size:8px;letter-spacing:.04em;">· no match in dashboard</span>`}
+          </div>
         </div>
         <button onclick="dismissSyncItem(${i})" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:12px;padding:0 2px;flex-shrink:0;opacity:.6;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6" title="Dismiss">✕</button>
-      </div>`).join('');
+      </div>`;
+    }).join('');
 
     results.style.display = 'block';
 
@@ -5446,7 +5470,7 @@ async function runSmartSync(){
     if(!document.getElementById('sync-apply-btn')){
       const applyBtn = document.createElement('button');
       applyBtn.id = 'sync-apply-btn';
-      applyBtn.textContent = 'Mark selected done →';
+      applyBtn.textContent = 'Mark selected done ✓';
       applyBtn.style.cssText = "width:100%;margin-top:6px;padding:6px;background:var(--sage);border:none;border-radius:3px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.07em;text-transform:uppercase;color:#fff;cursor:pointer;";
       applyBtn.onclick = applySmartSync;
       results.after(applyBtn);
@@ -5460,38 +5484,41 @@ async function runSmartSync(){
 }
 
 function applySmartSync(){
-  const checkboxes = document.querySelectorAll('#smart-sync-list input[type=checkbox]:checked');
-  let marked = 0;
+  // Smart Sync's only job: mark existing dashboard tasks as done
+  // when email/Slack signals show they're already handled.
+  // New task creation belongs to Email Scan and Slack Scan.
+  const checkboxes = document.querySelectorAll('#smart-sync-results input[type=checkbox]:checked');
+  let markedDone = 0; let skipped = 0;
 
   checkboxes.forEach(cb => {
     const item = _smartSyncItems[parseInt(cb.dataset.idx)];
-    if(!item) return;
+    if(!item || !item._matchedTask) { skipped++; return; }
 
-    if(item.type === 'main'){
-      const t = S.tasks.find(t=>t.id===item.id);
-      if(t){ t.done=true; trackCompletion(t.tag); marked++; }
-    } else if(item.type === 'faye'){
-      const t = S.fayeTasks.find(t=>t.id===item.id);
-      if(t){ t.done=true; trackCompletion('faye'); marked++; }
-    } else if(item.type === 'aaron'){
-      const t = S.aaronTasks.find(t=>t.id===item.id);
-      if(t){ t.done=true; trackCompletion('aaron'); marked++; }
-    } else if(item.type === 'waiting'){
-      // Remove from waiting on
-      Object.keys(S.waitingOn).forEach(ws => {
-        S.waitingOn[ws] = S.waitingOn[ws].filter(w=>w.id!==item.id);
-      });
-      marked++;
+    const matched = item._matchedTask;
+    if(matched._type === 'main'){
+      const t = S.tasks.find(t=>t.id===matched.id);
+      if(t && !t.done){ t.done=true; trackCompletion(t.tag, t.title); markedDone++; }
+    } else if(matched._type === 'faye'){
+      const t = S.fayeTasks.find(t=>t.id===matched.id);
+      if(t && !t.done){ t.done=true; trackCompletion('faye', t.title); markedDone++; }
+    } else if(matched._type === 'aaron'){
+      const t = S.aaronTasks.find(t=>t.id===matched.id);
+      if(t && !t.done){ t.done=true; trackCompletion('aaron', t.title); markedDone++; }
     }
   });
 
-  if(marked > 0){
+  if(markedDone > 0){
     save();
-    setTimeout(()=>{ render(); renderFaye(); renderAaron(); updateBadges(); metrics(); }, 400);
+    setTimeout(()=>{ render(); renderFaye(); renderAaron(); updateBadges(); metrics(); }, 300);
   }
 
   document.getElementById('smart-sync-results').style.display = 'none';
-  document.getElementById('smart-sync-status').textContent = `✓ Marked ${marked} item${marked>1?'s':''} done`;
+  const syncApplyBtn = document.getElementById('sync-apply-btn');
+  if(syncApplyBtn) syncApplyBtn.style.display = 'none';
+
+  document.getElementById('smart-sync-status').textContent = markedDone > 0
+    ? `✓ ${markedDone} task${markedDone>1?'s':''} marked done`
+    : 'No matches found — use Email Scan or Slack Scan to add new tasks';
 }
 
 // ── AGENT QUEUE ──
