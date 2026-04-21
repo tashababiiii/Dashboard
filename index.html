@@ -916,6 +916,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
               <option value="holiday">Holiday</option>
               <option value="white">White</option>
               <option value="browdy">Browdy Weiner</option>
+              <option value="rhodes">Rhodes</option>
             </select>
             <select class="mini-sel" id="new-hz">
               <option value="today">Today</option>
@@ -1160,6 +1161,11 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
           <div id="agent-execute-wrap" style="display:none;margin-top:16px;">
             <button id="agent-execute-btn" onclick="executeAgentQueue()" style="width:100%;padding:11px;background:var(--violet);color:#fff;border:none;border-radius:3px;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;">Execute Selected →</button>
             <div id="agent-execute-status" style="display:none;font-family:'DM Mono',monospace;font-size:10px;color:var(--sage);text-align:center;margin-top:6px;"></div>
+            <!-- Execution history toggle -->
+            <div style="margin-top:10px;text-align:center;">
+              <button onclick="toggleAgentHistory()" style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:.08em;text-transform:uppercase;background:none;border:none;color:var(--t3);cursor:pointer;padding:4px 0;">⟳ View execution history</button>
+            </div>
+            <div id="agent-history-panel" style="display:none;margin-top:8px;border:1px solid var(--bm);border-radius:4px;max-height:240px;overflow-y:auto;"></div>
           </div>
         </div>
       </div>
@@ -1826,6 +1832,7 @@ let S={
   fayeOpen:{doherty:true,garcia:true,morrell:true,holiday:true,white:true,browdy:true,rhodes:true},
   completedMetrics:{total:0,by645:0,byFaye:0,byPersonal:0,byAaron:0,byStrategic:0,byOffice:0,log:[]},
   agentMetrics:{suggested:0,executed:0},
+  agentExecutionLog:[],
   iopGrades:{gp:null,events:null,office:null,loop:null},
   goals:[
     {id:'gp',title:'GP Enablement',color:'var(--amber)',desc:'Reduce Aaron\'s operational load. Proactive calendar management, prep materials ready ahead of time.',milestones:[
@@ -2362,6 +2369,45 @@ function renderMetricsPage(){
     </div>`;
 }
 
+
+function toggleAgentHistory(){
+  const panel = document.getElementById('agent-history-panel');
+  if(!panel) return;
+  if(panel.style.display !== 'none'){ panel.style.display = 'none'; return; }
+  const log = S.agentExecutionLog || [];
+  if(!log.length){
+    panel.innerHTML = `<div style="padding:12px;font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);">No executions yet.</div>`;
+    panel.style.display = 'block';
+    return;
+  }
+  const icons = { draft_email:'✉', slack_message:'💬', calendar_event:'📅', add_task:'✓', log_delegation:'→' };
+  const toolLabels = { draft_email:'Email Draft', slack_message:'Slack Message', calendar_event:'Calendar Event', add_task:'Task Added', log_delegation:'Delegation Logged' };
+  panel.innerHTML = log.slice(0, 20).map(entry => {
+    const icon = icons[entry.tool] || '✦';
+    const label = toolLabels[entry.tool] || entry.tool;
+    const date = new Date(entry.executedAt);
+    const dateStr = date.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + ' ' + date.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    let detail = '';
+    if(entry.tool === 'slack_message' && entry.receipt?.receipt){
+      detail = `<div style="font-size:9px;color:var(--t3);">→ ${entry.receipt.receipt.channel}: "${(entry.receipt.receipt.message||'').slice(0,60)}…"</div>`;
+    } else if(entry.tool === 'draft_email' && entry.receipt?.receipt){
+      detail = `<div style="font-size:9px;color:var(--t3);">→ ${entry.receipt.receipt.to} · ${entry.receipt.receipt.subject}</div>`;
+    } else if(entry.tool === 'calendar_event' && entry.receipt?.receipt){
+      detail = `<div style="font-size:9px;color:var(--t3);">→ ${entry.receipt.receipt.title} · ${entry.receipt.receipt.date}</div>`;
+    }
+    return `<div style="padding:8px 10px;border-bottom:1px solid var(--b);">
+      <div style="display:flex;gap:6px;align-items:center;">
+        <span style="font-size:11px;">${icon}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${entry.title}</div>
+          <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--t3);">${label} · ${dateStr}</div>
+          ${detail}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  panel.style.display = 'block';
+}
 // ── MOBILE TAB SWITCHING ──
 // 4-tab mobile nav: Tasks | Calendar | Agent | Tools
 // Tasks = My Priorities full height (center calendar col + sidebar hidden)
@@ -2703,6 +2749,68 @@ function renderCapacityUI(v){
 const pOrd={high:0,med:1,low:2};
 const tagLabel={645:'Office & Events',personal:'Personal',aaron:'Ops Support',strategic:'Strategic',office:'Office & Events',faye:'Faye'};
 
+// ── DUPLICATE DETECTION ────────────────────────────────────────────────────
+// Normalise a title for fuzzy comparison — lowercase, strip punctuation/spaces
+function _normTitle(t){ return (t||'').toLowerCase().replace(/[^a-z0-9]/g,''); }
+
+// Returns the existing task if a near-duplicate is found, otherwise null
+// Checks all task arrays. Match = normalised title ≥ 80% character overlap
+function _isDuplicate(title){
+  const norm = _normTitle(title);
+  if(norm.length < 4) return null; // too short to fuzzy match reliably
+  const all = [
+    ...S.tasks.filter(t=>!t.done),
+    ...S.fayeTasks.filter(t=>!t.done),
+    ...S.aaronTasks.filter(t=>!t.done)
+  ];
+  for(const t of all){
+    const tn = _normTitle(t.title);
+    // Exact match
+    if(tn === norm) return t;
+    // Substring match (one contains the other)
+    if(norm.length >= 6 && (tn.includes(norm) || norm.includes(tn))) return t;
+    // Similarity: count matching chars / max length
+    const longer = Math.max(norm.length, tn.length);
+    const shorter = Math.min(norm.length, tn.length);
+    if(shorter / longer >= 0.85) return t; // 85% length similarity + starts same
+  }
+  return null;
+}
+
+// Warn and skip if duplicate (used for bulk auto-adds from scans/uploads)
+// Returns true if it IS a duplicate (caller should skip)
+let _dedupSkipCount = 0;
+let _dedupToastTimer = null;
+function _skipIfDuplicate(title, source){
+  const dupe = _isDuplicate(title);
+  if(dupe){
+    console.log(`[Dedup] Skipped "${title}" — matches existing: "${dupe.title}" (${source})`);
+    _dedupSkipCount++;
+    clearTimeout(_dedupToastTimer);
+    _dedupToastTimer = setTimeout(()=>{
+      if(_dedupSkipCount > 0){
+        _showDedupToast(_dedupSkipCount);
+        _dedupSkipCount = 0;
+      }
+    }, 800);
+    return true;
+  }
+  return false;
+}
+function _showDedupToast(count){
+  let toast = document.getElementById('dedup-toast');
+  if(!toast){
+    toast = document.createElement('div');
+    toast.id = 'dedup-toast';
+    toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#2C1654;color:#fff;font-family:DM Mono,monospace;font-size:11px;letter-spacing:.06em;padding:8px 18px;border-radius:4px;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = `⊘ ${count} duplicate${count>1?'s':''} skipped`;
+  toast.style.opacity = '1';
+  setTimeout(()=>{ toast.style.opacity='0'; }, 3000);
+}
+// ────────────────────────────────────────────────────────────────────────────
+
 function addTask(title,tag,hz,priority='med',note='',effort='standard'){
   const t={id:Date.now()+Math.random(),title,tag,hz,priority,note,effort,done:false,at:new Date().toISOString()};
   S.tasks.push(t);
@@ -2856,7 +2964,7 @@ function renderFaye(){
         ${tasks.length?tasks.filter(t=>!t.done).map((t,i)=>`
           <div class="task-item" style="animation-delay:${i*.04}s" id="fti-${t.id}">
             <div class="t-bar ${t.priority}" style="background:${client.color}"></div>
-            <div class="t-body" onclick="openTaskDrawer(${t.id},'faye')" style="cursor:pointer;flex:1;">${t.note?`<div class="t-tags"><span class="t-note">${t.note}</span></div>`:''}<div class="task-title" id="ftt-${t.id}">${t.title}${t.detailNotes?` <span style="font-size:11px;color:var(--t3);font-family:'DM Mono',monospace;">···</span>`:''}</div></div>
+            <div class="t-body" onclick="openTaskDrawer(${t.id},'faye')" style="cursor:pointer;flex:1;">${t.note?`<div class="t-tags"><span class="t-note">${t.note}</span></div>`:''}<div class="task-title" id="ftt-${t.id}">${t.title}${t.detailNotes?` <span style="font-size:11px;color:var(--t3);font-family:'DM Mono',monospace;">···</span>`:''}${t.effort&&t.effort!=='standard'?`<span style="font-family:'DM Mono',monospace;font-size:8px;color:var(--t3);margin-left:5px;">${t.effort==='quick'?'⚡':'🧠'}</span>`:''}</div></div>
             <div style="display:flex;align-items:center;gap:6px;">
               <div class="t-check" onclick="toggleFT(${t.id})"></div>
               <button onclick="deleteFayeTask(${t.id})" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px;border-radius:2px;transition:color .15s;" onmouseover="this.style.color='var(--rose)'" onmouseout="this.style.color='var(--t3)'">✕</button>
@@ -3315,7 +3423,8 @@ async function loadCalendars(){
             <div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--t3);">Calendar not connected</div>
             <a href="/api/auth?action=login" style="background:var(--gold);color:#fff;border:none;border-radius:3px;padding:7px 14px;font-family:'DM Mono',monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;text-decoration:none;display:inline-block;">Connect Google Calendar →</a>
           </div>`;
-        document.getElementById('my-cal').innerHTML = connectHTML;
+        const myCalEl = document.getElementById('my-cal') || document.getElementById('all-cal');
+        if(myCalEl) myCalEl.innerHTML = connectHTML;
         document.getElementById('aaron-cal').innerHTML = `<div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--t3);">Connect calendar above</div>`;
         return;
       }
@@ -3335,9 +3444,9 @@ async function loadCalendars(){
     
   }catch(e){
     setCalStatus('err','Calendar load failed');
-    document.getElementById('my-cal').innerHTML=`<div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--rose);">Load failed — <a href="/api/auth?action=login" style="color:var(--gold);">reconnect</a></div>`;
+    (document.getElementById('all-cal')||{innerHTML:''}).innerHTML=`<div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--rose);">Load failed — <a href="/api/auth?action=login" style="color:var(--gold);">reconnect</a></div>`;
     document.getElementById('aaron-cal').innerHTML=`<div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--rose);">Load failed</div>`;
-    document.getElementById('my-cal-dot').className='cal-lbl-dot';
+    const myCalDot=document.getElementById('my-cal-dot')||document.getElementById('all-cal-dot'); if(myCalDot) myCalDot.className='cal-lbl-dot';
     document.getElementById('aaron-cal-dot').className='cal-lbl-dot';
   }
 }
@@ -3587,6 +3696,7 @@ function addScreenshotTask(i){
 
   const tag = document.getElementById('cap-tag')?.value || t.workspace || '645';
 
+  if(_skipIfDuplicate(t.task,'screenshot')) return;
   if(tag === 'faye'){
     const clientSel = document.getElementById(`cft-client-${i}`);
     const client = clientSel?.value || t.client || 'doherty';
@@ -3855,6 +3965,7 @@ function addCapturedFileTask(i) {
   // Read category from the inline dropdown on the card, fall back to Claude's guess
   const catSel = document.getElementById(`cft-cat-${i}`);
   const tag = catSel?.value || t.workspace || '645';
+  if(_skipIfDuplicate(t.task,'file-capture')) return;
   if (tag === 'faye'){
     const clientSel = document.getElementById(`cft-client-${i}`);
     const client = clientSel?.value || t.client || 'doherty';
@@ -4112,7 +4223,7 @@ async function parseCap(){
     const raw=await claude(sys,`Workspace: ${tag}. Text: "${txt}"`);
     let tasks=[];try{tasks=JSON.parse(raw.replace(/```json|```/g,'').trim());}catch(e){}
     if(tasks.length){
-      if(tag==='faye')tasks.forEach(t=>addFT(t.title,t.client||'doherty',t.hz||'week',t.priority||'med',t.note||''));
+      if(tag==='faye')tasks.forEach(t=>{ if(!_skipIfDuplicate(t.title,'doc-parse')) addFT(t.title,t.client||'doherty',t.hz||'week',t.priority||'med',t.note||''); });
       else if(tag==='aaron')tasks.forEach(t=>addAT(t.title,t.hz||'week',t.priority||'med',t.note||''));
       else tasks.forEach(t=>addTask(t.title,tag,t.hz||'week',t.priority||'med',t.note||''));
       aitxt.textContent=`Added ${tasks.length} task${tasks.length>1?'s':''}.`;
@@ -4144,7 +4255,7 @@ async function processFile(file,type){
       const raw=await claude(sys,`File: ${file.name}\n${ev.target.result.substring(0,6000)}`);
       let tasks=[];try{tasks=JSON.parse(raw.replace(/```json|```/g,'').trim());}catch(e){}
       if(tasks.length){
-        if(isFaye)tasks.forEach(t=>addFT(t.title,t.client||'doherty',t.hz||'week',t.priority||'med',t.note||''));
+        if(isFaye)tasks.forEach(t=>{ if(!_skipIfDuplicate(t.title,'faye-dump')) addFT(t.title,t.client||'doherty',t.hz||'week',t.priority||'med',t.note||''); });
         else tasks.forEach(t=>addTask(t.title,'personal',t.hz||'week',t.priority||'med',t.note||''));
         if(statusEl)statusEl.textContent=`✓ Imported ${tasks.length} tasks`;
       }else{if(statusEl)statusEl.textContent='Could not parse. Try pasting as text.';}
@@ -4186,8 +4297,9 @@ async function runIntake(){
       );
       let items=[];try{items=JSON.parse(raw.replace(/```json|```/g,'').trim());}catch(e){}
       items.forEach(t=>{
-        if(t.type==='faye')addFT(t.title,t.client||'doherty',t.hz||'today',t.priority||'med',t.note||'');
-        else if(t.type==='aaron')addAT(t.title,t.hz||'week',t.priority||'med',t.note||'');
+        if(_skipIfDuplicate(t.title,'morning-intake')) return;
+        if(t.type==='faye') addFT(t.title,t.client||'doherty',t.hz||'today',t.priority||'med',t.note||'',t.effort||'standard');
+        else if(t.type==='aaron') addAT(t.title,t.hz||'week',t.priority||'med',t.note||'',t.effort||'standard');
         else if(t.type==='office'){S.officeTasks.push({id:Date.now()+Math.random(),title:t.title,category:'Manual',priority:t.priority||'med',done:false,at:new Date().toISOString()});save();}
         else addTask(t.title,t.tag||'645',t.hz||'today',t.priority||'med',t.note||'');
       });
@@ -5391,6 +5503,7 @@ async function executeAgentQueue(){
   if(execStatus){ execStatus.style.display = 'block'; execStatus.textContent = 'Working…'; }
 
   let succeeded = 0; let failed = 0;
+  const receipts = [];
 
   for(let i = 0; i < _agentItems.length; i++){
     const cb = document.getElementById(`aq-cb-${i}`);
@@ -5401,30 +5514,100 @@ async function executeAgentQueue(){
     const itemEl = document.getElementById(`aq-item-${i}`);
 
     try {
-      await executeAgentItem(item);
+      const receipt = await executeAgentItem(item);
       if(statusEl){ statusEl.style.display='block'; statusEl.textContent='✅'; }
       if(itemEl){ itemEl.style.opacity='0.5'; itemEl.style.borderColor='var(--sage)'; }
       succeeded++;
       if(!S.agentMetrics) S.agentMetrics = {suggested:0, executed:0};
       S.agentMetrics.executed++;
+      // Log the execution with receipt
+      if(!S.agentExecutionLog) S.agentExecutionLog = [];
+      S.agentExecutionLog.unshift({
+        id: Date.now() + i,
+        tool: item.tool,
+        title: item.title,
+        executedAt: new Date().toISOString(),
+        receipt: receipt || null
+      });
+      if(S.agentExecutionLog.length > 50) S.agentExecutionLog = S.agentExecutionLog.slice(0, 50);
+      if(receipt) receipts.push({ item, receipt });
       save();
     } catch(e) {
       if(statusEl){ statusEl.style.display='block'; statusEl.textContent='❌'; }
       failed++;
     }
 
-    await new Promise(r => setTimeout(r, 300)); // small delay between executions
+    await new Promise(r => setTimeout(r, 300));
   }
 
   if(execBtn){ execBtn.disabled = false; execBtn.textContent = 'Execute selected →'; }
-  if(execStatus) execStatus.textContent = `Done — ${succeeded} completed${failed > 0 ? `, ${failed} failed` : ''}`;
+
+  // Show receipt summary in status area
+  if(receipts.length > 0){
+    renderAgentReceipts(receipts);
+    if(execStatus) execStatus.style.display = 'none';
+  } else {
+    if(execStatus) execStatus.textContent = `Done — ${succeeded} completed${failed > 0 ? `, ${failed} failed` : ''}`;
+  }
   document.getElementById('tb-agent').textContent = Math.max(0, _agentItems.length - succeeded);
+}
+
+function renderAgentReceipts(receipts){
+  // Show a clear confirmation panel below the execute button
+  let el = document.getElementById('agent-receipt-panel');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'agent-receipt-panel';
+    el.style.cssText = 'margin-top:12px;border:1px solid var(--bm);border-radius:4px;overflow:hidden;';
+    const execBtn = document.getElementById('agent-execute-btn');
+    if(execBtn) execBtn.parentElement.insertBefore(el, execBtn.nextSibling);
+  }
+
+  const icons = { draft_email:'✉', slack_message:'💬', calendar_event:'📅', add_task:'✓', log_delegation:'→' };
+
+  el.innerHTML = `<div style="background:var(--sage-d,rgba(21,122,64,.1));padding:8px 12px;border-bottom:1px solid var(--bm);">
+    <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--sage);">✓ ${receipts.length} action${receipts.length>1?'s':''} executed</span>
+  </div>
+  ${receipts.map(({item, receipt}) => {
+    const icon = icons[item.tool] || '✦';
+    const time = new Date(receipt.executedAt||receipt.sentAt||receipt.draftedAt||receipt.createdAt||Date.now()).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+
+    let detail = '';
+    if(item.tool === 'slack_message' && receipt.receipt){
+      const r = receipt.receipt;
+      detail = `<div style="font-size:10px;color:var(--t2);margin-top:3px;">Sent to <strong>${r.channel}</strong> at ${time}</div>
+      <div style="font-size:10px;color:var(--t3);margin-top:2px;font-style:italic;border-left:2px solid var(--bm);padding-left:6px;">${(r.message||'').slice(0,120)}${(r.message||'').length>120?'…':''}</div>`;
+    } else if(item.tool === 'draft_email' && receipt.receipt){
+      const r = receipt.receipt;
+      detail = `<div style="font-size:10px;color:var(--t2);margin-top:3px;">Draft saved · To: <strong>${r.to}</strong></div>
+      <div style="font-size:10px;color:var(--t3);margin-top:2px;">Subject: ${r.subject}</div>
+      <div style="font-size:10px;color:var(--amber);margin-top:3px;">⚠ Review & send from Gmail Drafts</div>`;
+    } else if(item.tool === 'calendar_event' && receipt.receipt){
+      const r = receipt.receipt;
+      detail = `<div style="font-size:10px;color:var(--t2);margin-top:3px;">Created: <strong>${r.title}</strong></div>
+      <div style="font-size:10px;color:var(--t3);margin-top:2px;">${r.date} at ${r.time} · ${r.duration} min</div>`;
+    }
+
+    return `<div style="padding:10px 12px;border-bottom:1px solid var(--b);">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="font-size:14px;">${icon}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t);flex:1;">${item.title}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:8px;color:var(--t3);">${time}</span>
+      </div>
+      ${detail}
+    </div>`;
+  }).join('')}
+  <div style="padding:8px 12px;text-align:right;">
+    <button onclick="document.getElementById('agent-receipt-panel').style.display='none'" style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:.06em;text-transform:uppercase;background:none;border:none;color:var(--t3);cursor:pointer;">Dismiss</button>
+  </div>`;
+  el.style.display = 'block';
 }
 
 async function executeAgentItem(item){
   const d = item.data || {};
 
   if(item.tool === 'add_task'){
+    if(_skipIfDuplicate(d.title,'agent-queue')) return;
     if(d.tag === 'faye') addFT(d.title, d.client || 'doherty', d.hz || 'today', d.priority || 'med', d.note || '');
     else if(d.tag === 'aaron' || d.tag === 'strategic') addAT(d.title, d.hz || 'today', d.priority || 'med', d.note || '');
     else addTask(d.title, d.tag || '645', d.hz || 'today', d.priority || 'med', d.note || '');
@@ -5455,7 +5638,8 @@ async function executeAgentItem(item){
       body: JSON.stringify({ action:'execute', item })
     });
     if(!r.ok) throw new Error(`Execute failed: ${r.status}`);
-    return;
+    const result = await r.json().catch(()=>({}));
+    return result; // Pass receipt back up to executeAgentQueue
   }
 
   throw new Error(`Unknown tool: ${item.tool}`);
