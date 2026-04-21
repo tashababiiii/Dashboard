@@ -1437,7 +1437,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
         <!-- Screenshot upload -->
         <div style="margin-top:6px;">
           <label style="display:flex;align-items:center;gap:8px;border:1px dashed var(--bm);border-radius:3px;padding:8px 12px;cursor:pointer;transition:all .2s;background:var(--s3);" onmouseover="this.style.borderColor='var(--gold)';this.style.background='var(--gold-d)'" onmouseout="this.style.borderColor='var(--bm)';this.style.background='var(--s3)'">
-            <input type="file" accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx,.md,.heic,.heif" style="display:none;" onchange="handleMorningFile(event)" id="morning-file-upload" />
+            <input type="file" accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx,.md,.heic,.heif" multiple style="display:none;" onchange="handleMorningFile(event)" id="morning-file-upload" />
             <span style="font-size:15px;">📎</span>
             <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);letter-spacing:.06em;text-transform:uppercase;">Upload file or screenshot → Claude reads it into Brain Dump</span>
           </label>
@@ -1464,7 +1464,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
         <!-- Screenshot upload for Faye tasks -->
         <div style="margin-top:6px;">
           <label style="display:flex;align-items:center;gap:8px;border:1px dashed var(--bm);border-radius:3px;padding:8px 12px;cursor:pointer;transition:all .2s;background:var(--s3);" onmouseover="this.style.borderColor='var(--rose)';this.style.background='rgba(184,50,72,.06)'" onmouseout="this.style.borderColor='var(--bm)';this.style.background='var(--s3)'">
-            <input type="file" accept="image/*,.heic,.heif" style="display:none;" onchange="handleFayeScreenshot(event)" id="faye-screenshot-upload" />
+            <input type="file" accept="image/*,.heic,.heif" multiple style="display:none;" onchange="handleFayeScreenshot(event)" id="faye-screenshot-upload" />
             <span style="font-size:15px;">📸</span>
             <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);letter-spacing:.06em;text-transform:uppercase;">Upload screenshot → Claude reads Faye tasks from it</span>
           </label>
@@ -2479,8 +2479,8 @@ ${block}` : block;
 }
 
 async function handleFayeScreenshot(event){
-  const file = event.target.files[0];
-  if(!file) return;
+  const files = Array.from(event.target.files || []);
+  if(!files.length) return;
   event.target.value = '';
 
   const loading = document.getElementById('faye-screenshot-loading');
@@ -2492,69 +2492,64 @@ async function handleFayeScreenshot(event){
   if(clientRow) clientRow.style.display = 'none';
   _fayeScreenshotExtracted = '';
 
-  try {
-    // Use vision API to extract text from the image
-    const extracted = await _readFileContent(file);
+  const textarea = document.getElementById('m-faye-txt');
+  let autoAdded = 0; let needsClient = []; let failed = 0;
 
-    if(loading) loading.style.display = 'none';
+  for(const file of files){
+    const loadingTxt = document.querySelector('#faye-screenshot-loading div:last-child');
+    if(loadingTxt) loadingTxt.textContent = `Reading ${file.name}… (${autoAdded + needsClient.length + failed + 1} of ${files.length})`;
 
-    if(!extracted.trim()){
-      if(status){
-        status.style.display = 'block';
-        status.style.color = 'var(--rose)';
-        status.textContent = 'Could not read screenshot — try a clearer image.';
+    try {
+      const extracted = await _readFileContent(file);
+      if(!extracted.trim()){ failed++; continue; }
+
+      // Try to auto-detect client from text
+      let autoDetected = null;
+      const lower = extracted.toLowerCase();
+      for(const c of CLIENTS){
+        if(lower.includes(c.label.toLowerCase()) || lower.includes(c.id.toLowerCase())){
+          autoDetected = c.id; break;
+        }
       }
-      return;
-    }
 
-    // Store extracted text and show client selector
-    _fayeScreenshotExtracted = extracted;
-
-    // Try to auto-detect the client from the extracted text
-    let autoDetected = null;
-    const lower = extracted.toLowerCase();
-    for(const c of CLIENTS){
-      if(lower.includes(c.label.toLowerCase()) || lower.includes(c.id.toLowerCase())){
-        autoDetected = c.id;
-        break;
-      }
-    }
-
-    if(autoDetected){
-      // Auto-detected — append directly with the detected client
-      const clientLabel = CLIENTS.find(c=>c.id===autoDetected)?.label || autoDetected;
-      const textarea = document.getElementById('m-faye-txt');
-      const existing = textarea.value.trim();
-      const block = `--- From screenshot [${clientLabel} — auto-detected] ---
+      if(autoDetected){
+        const clientLabel = CLIENTS.find(c=>c.id===autoDetected)?.label || autoDetected;
+        const existing = textarea.value.trim();
+        const block = `--- From ${file.name} [${clientLabel} — auto-detected] ---
 ${extracted}`;
-      textarea.value = existing ? `${existing}
+        textarea.value = existing ? `${existing}
 
 ${block}` : block;
-      _fayeScreenshotExtracted = '';
-      if(status){
-        status.style.display = 'block';
-        status.style.color = 'var(--sage)';
-        status.textContent = `✓ Added to Faye tasks · auto-detected: ${clientLabel}`;
-        setTimeout(()=>{ status.style.display='none'; }, 3000);
+        autoAdded++;
+      } else {
+        // Queue for manual client selection
+        needsClient.push({ name: file.name, extracted });
       }
-    } else {
-      // No client detected — show selector for user to pick
-      if(clientRow) clientRow.style.display = 'block';
-      if(status){
-        status.style.display = 'block';
-        status.style.color = 'var(--amber)';
-        status.textContent = 'Screenshot read — select the client above to add it to Faye tasks.';
-      }
+    } catch(e) {
+      failed++;
+      console.error(`Faye screenshot error for ${file.name}:`, e);
     }
+  }
 
-  } catch(e) {
-    if(loading) loading.style.display = 'none';
-    if(status){
-      status.style.display = 'block';
-      status.style.color = 'var(--rose)';
-      status.textContent = 'Could not read screenshot — try again.';
-    }
-    console.error('Faye screenshot error:', e);
+  if(loading) loading.style.display = 'none';
+
+  // If any files need client selection, store the combined text and show the selector
+  if(needsClient.length > 0){
+    _fayeScreenshotExtracted = needsClient.map(f => '--- From ' + f.name + ' ---\n' + f.extracted).join('\n\n');
+
+    if(clientRow) clientRow.style.display = 'block';
+  }
+
+  // Status summary
+  if(status){
+    status.style.display = 'block';
+    const parts = [];
+    if(autoAdded > 0) parts.push(`✓ ${autoAdded} auto-added`);
+    if(needsClient.length > 0) parts.push(`${needsClient.length} need${needsClient.length>1?'':'s'} client selection`);
+    if(failed > 0) parts.push(`${failed} failed`);
+    status.style.color = needsClient.length > 0 ? 'var(--amber)' : (failed > 0 ? 'var(--rose)' : 'var(--sage)');
+    status.textContent = parts.join(' · ');
+    if(needsClient.length === 0) setTimeout(()=>{ status.style.display='none'; }, 4000);
   }
 }
 // ────────────────────────────────────────────────────────────────────────────
@@ -3972,49 +3967,54 @@ async function _readGoogleLink(url) {
 // ── MORNING MODAL FILE UPLOAD ──
 // Reads any file type and appends extracted text to the Brain Dump textarea
 async function handleMorningFile(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+  const files = Array.from(event.target.files || []);
+  if (!files.length) return;
 
   const loading = document.getElementById('morning-screenshot-loading');
   const status  = document.getElementById('morning-screenshot-status');
   const loadingTxt = document.getElementById('morning-file-loading-txt');
   event.target.value = '';
 
-  if (loadingTxt) loadingTxt.textContent = `Reading ${file.name}…`;
+  const plural = files.length > 1 ? `${files.length} files` : files[0].name;
+  if (loadingTxt) loadingTxt.textContent = `Reading ${plural}…`;
   loading.style.display = 'block';
   status.style.display = 'none';
 
-  try {
-    const extracted = await _readFileContent(file);
+  let added = 0; let failed = 0;
+  const textarea = document.getElementById('m-notes');
 
-    loading.style.display = 'none';
-    if (!extracted.trim()) {
-      status.style.display = 'block';
-      status.style.color = 'var(--rose)';
-      status.textContent = 'Could not extract text from file — try a different format.';
-      return;
-    }
-
-    const textarea = document.getElementById('m-notes');
-    const existing = textarea.value.trim();
-    const label = `--- From ${file.name} ---`;
-    textarea.value = existing ? `${existing}
+  for (const file of files) {
+    if (loadingTxt) loadingTxt.textContent = `Reading ${file.name}… (${added + failed + 1} of ${files.length})`;
+    try {
+      const extracted = await _readFileContent(file);
+      if (!extracted.trim()) { failed++; continue; }
+      const existing = textarea.value.trim();
+      const label = `--- From ${file.name} ---`;
+      textarea.value = existing ? `${existing}
 
 ${label}
 ${extracted}` : `${label}
 ${extracted}`;
-
-    status.style.display = 'block';
-    status.style.color = 'var(--sage)';
-    status.textContent = `✓ ${file.name} added to Brain Dump`;
-    setTimeout(() => { status.style.display = 'none'; }, 3000);
-
-  } catch(e) {
-    loading.style.display = 'none';
-    status.style.display = 'block';
-    status.style.color = 'var(--rose)';
-    status.textContent = 'Could not read file — try again.';
+      added++;
+    } catch(e) {
+      failed++;
+      console.error(`handleMorningFile error for ${file.name}:`, e);
+    }
   }
+
+  loading.style.display = 'none';
+  status.style.display = 'block';
+  if (added === 0) {
+    status.style.color = 'var(--rose)';
+    status.textContent = 'Could not extract text from any files — try a different format.';
+  } else if (failed > 0) {
+    status.style.color = 'var(--amber)';
+    status.textContent = `✓ ${added} file${added>1?'s':''} added — ${failed} could not be read`;
+  } else {
+    status.style.color = 'var(--sage)';
+    status.textContent = `✓ ${added} file${added>1?'s':''} added to Brain Dump`;
+  }
+  setTimeout(() => { status.style.display = 'none'; }, 4000);
 }
 
 // ── CAPTURE PILL FILE UPLOAD ──
