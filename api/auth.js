@@ -71,7 +71,9 @@ async function handleCallback(req, res) {
         </div>`);
     }
 
-    const encoded = Buffer.from(JSON.stringify(tokens)).toString('base64');
+    // Store email in the token so /api/state can read it without extra API calls
+    const tokensWithEmail = { ...tokens, email: email };
+    const encoded = Buffer.from(JSON.stringify(tokensWithEmail)).toString('base64');
     res.setHeader('Set-Cookie', [
       `gcal_tokens=${encoded}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000`,
       `oauth_state=; Path=/; Max-Age=0; HttpOnly; Secure`
