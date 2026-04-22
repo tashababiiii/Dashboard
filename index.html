@@ -5151,22 +5151,23 @@ function openTaskDrawer(id, type='main'){
 
   // Tag (main tasks only) + Faye client selector
   const tagEl = document.getElementById('td-tag');
-  const tagRow = tagEl?.parentElement?.parentElement;
   const fayeClientWrap = document.getElementById('td-faye-client-wrap');
   const fayeClientEl = document.getElementById('td-faye-client');
-  if(tagRow){
+  // Use tagField (direct parent) not tagRow — tagRow also contains Horizon and hiding it breaks that
+  const tagField = tagEl?.parentElement;
+  if(tagField){
     if(type==='main'){
-      tagRow.style.display = '';
+      tagField.style.display = '';
       if(tagEl) tagEl.value = t.tag || '645';
       // Show client selector if tag is faye
       if(fayeClientWrap) fayeClientWrap.style.display = (t.tag==='faye') ? '' : 'none';
     } else if(type==='faye'){
-      tagRow.style.display = 'none';
+      tagField.style.display = 'none';
       // Always show client selector for faye tasks
       if(fayeClientWrap){ fayeClientWrap.style.display = ''; }
       if(fayeClientEl) fayeClientEl.value = t.client || 'doherty';
     } else {
-      tagRow.style.display = 'none';
+      tagField.style.display = 'none';
       if(fayeClientWrap) fayeClientWrap.style.display = 'none';
     }
   }
