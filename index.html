@@ -1341,7 +1341,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
     <div style="border-bottom:1px solid var(--b);padding:12px 16px;flex-shrink:0;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--t2);font-weight:600;">📧 Email Scan</div>
-        <button onclick="runEmailScan()" style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:5px 12px;background:var(--amber);color:#fff;border:none;border-radius:3px;cursor:pointer;">Scan →</button>
+        <button onclick="runEmailScan();_updateMobileToolResult('email','<div style=\"color:var(--t3);font-size:11px;\">Scanning your inbox…</div>')" style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:5px 12px;background:var(--amber);color:#fff;border:none;border-radius:3px;cursor:pointer;">Scan →</button>
       </div>
       <div id="mob-email-results" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--t3);">Tap Scan to check your inbox</div>
     </div>
@@ -1349,7 +1349,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
     <div style="border-bottom:1px solid var(--b);padding:12px 16px;flex-shrink:0;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--t2);font-weight:600;">💬 Slack Scan</div>
-        <button onclick="runSlackScan()" style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:5px 12px;background:var(--violet);color:#fff;border:none;border-radius:3px;cursor:pointer;">Scan →</button>
+        <button onclick="runSlackScan();_updateMobileToolResult('slack','<div style=\"color:var(--t3);font-size:11px;\">Scanning Slack…</div>')" style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:5px 12px;background:var(--violet);color:#fff;border:none;border-radius:3px;cursor:pointer;">Scan →</button>
       </div>
       <div id="mob-slack-results" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--t3);">Tap Scan to check Slack</div>
     </div>
@@ -1357,7 +1357,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
     <div style="padding:12px 16px;flex-shrink:0;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--t2);font-weight:600;">⟳ Smart Sync</div>
-        <button onclick="runSmartSync()" style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:5px 12px;background:var(--sage);color:#fff;border:none;border-radius:3px;cursor:pointer;">Sync →</button>
+        <button onclick="runSmartSync();_updateMobileToolResult('sync','<div style=\"color:var(--t3);font-size:11px;\">Running sync…</div>')" style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:5px 12px;background:var(--sage);color:#fff;border:none;border-radius:3px;cursor:pointer;">Sync →</button>
       </div>
       <div id="mob-sync-results" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--t3);">Tap to run a quick combined scan</div>
     </div>
@@ -2708,6 +2708,14 @@ function _resetDailyCheckin(){
 }
 // ────────────────────────────────────────────────────────────────────────────
 
+
+// ── MOBILE TOOLS RESULT MIRRORING ───────────────────────────────────────────
+// Updates the mobile tools view result divs when a scan completes
+function _updateMobileToolResult(type, html){
+  const el = document.getElementById(`mob-${type}-results`);
+  if(el) el.innerHTML = html;
+}
+// ────────────────────────────────────────────────────────────────────────────
 // ── MOBILE TAB SWITCHING ──
 // 4-tab mobile nav: Tasks | Calendar | Agent | Tools
 // Tasks = My Priorities full height (center calendar col + sidebar hidden)
@@ -4856,10 +4864,12 @@ async function runSlackScan() {
           <button onclick="dismissSlackItem(${i})" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:13px;padding:0 2px;flex-shrink:0;opacity:.6;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6" title="Dismiss">✕</button>
         </div>`).join('');
       results.style.display = 'block';
+      _updateMobileToolResult('slack', `<div style="color:var(--sage);font-size:11px;">✓ ${slackFoundTasks.length} task${slackFoundTasks.length>1?'s':''} found — check Slack Scan on desktop to review</div>`);
     } else {
       empty.style.display = 'block';
       empty.style.color = 'var(--t3)';
       empty.textContent = 'No new tasks found in the last 24 hours.';
+      _updateMobileToolResult('slack', '<div style="color:var(--t3);font-size:11px;">No new Slack tasks in the last 24 hours</div>');
     }
   } catch(e) {
     loading.style.display = 'none';
@@ -4868,6 +4878,7 @@ async function runSlackScan() {
     empty.style.display = 'block';
     empty.style.color = 'var(--amber)';
     empty.textContent = '⚡ Slack scan unavailable. Check your connection and try again.';
+    _updateMobileToolResult('slack', '<div style="color:var(--amber);font-size:11px;">⚡ Scan failed — try again</div>');
   }
 }
 
@@ -4938,6 +4949,17 @@ async function runEmailScan() {
     btn.textContent = 'Scan Email →';
 
     const hasAnything = emailFoundTasks.length > 0 || emailFoundWaiting.length > 0 || fyi.length > 0;
+    // Mirror summary to mobile tools view
+    if(hasAnything){
+      const taskCount = emailFoundTasks.length;
+      const waitCount = emailFoundWaiting.length;
+      const parts = [];
+      if(taskCount > 0) parts.push(`${taskCount} task${taskCount>1?'s':''}`);
+      if(waitCount > 0) parts.push(`${waitCount} waiting`);
+      _updateMobileToolResult('email', `<div style="color:var(--sage);font-size:11px;">✓ ${parts.join(' · ')} found — switch to desktop to review &amp; add</div>`);
+    } else {
+      _updateMobileToolResult('email', '<div style="color:var(--t3);font-size:11px;">Inbox clear — nothing new to triage</div>');
+    }
     if (!hasAnything) {
       empty.style.display = 'block';
       empty.style.color = 'var(--t3)';
@@ -5439,6 +5461,8 @@ async function runSmartSync(){
 
     _smartSyncItems = found;
     status.textContent = `${found.length} item${found.length>1?'s':''} · ${timeStr}`;
+    const matchCount = found.filter(i=>i._matchedTask).length;
+    _updateMobileToolResult('sync', `<div style="color:var(--sage);font-size:11px;">✓ ${found.length} item${found.length>1?'s':''} found${matchCount>0?' · '+matchCount+' match'+( matchCount>1?'es':'')+' to mark done':''}</div>`);
 
     // Try to match each surfaced item to an existing dashboard task
     found.forEach(item => {
