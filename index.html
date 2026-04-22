@@ -4562,14 +4562,32 @@ async function parseCap(){
   try{
     const sys=tag==='faye'
       ?`Parse into Faye client tasks. Clients: doherty, garcia, morrell, holiday, white. Return ONLY JSON array. Each: {"title":string,"client":string,"priority":"high"|"med"|"low","hz":"today"|"week"|"month"|"someday","note":string}.`
-      :`Parse into tasks. Return ONLY JSON array. Each: {"title":string,"priority":"high"|"med"|"low","hz":"today"|"week"|"month"|"someday","note":string}.`;
+      :`Parse into tasks for Natasha Bradley (EA at 645 Ventures). Return ONLY JSON array. Each: {"title":string,"priority":"high"|"med"|"low","hz":"today"|"week"|"next-week"|"month"|"someday","workspace":"645|aaron|strategic|faye|personal","note":string}. Classify workspace: aaron=tasks for/from Aaron Holiday, faye=Faye client tasks, strategic=investments/LP/fundraising, personal=personal tasks, 645=office/events/ops. Default to the provided workspace if unclear.`;
     const raw=await claude(sys,`Workspace: ${tag}. Text: "${txt}"`);
     let tasks=[];try{tasks=JSON.parse(raw.replace(/```json|```/g,'').trim());}catch(e){}
     if(tasks.length){
-      if(tag==='faye')tasks.forEach(t=>{ if(!_skipIfDuplicate(t.title,'doc-parse')) addFT(t.title,t.client||'doherty',t.hz||'week',t.priority||'med',t.note||''); });
-      else if(tag==='aaron')tasks.forEach(t=>addAT(t.title,t.hz||'week',t.priority||'med',t.note||''));
-      else tasks.forEach(t=>addTask(t.title,tag,t.hz||'week',t.priority||'med',t.note||''));
-      aitxt.textContent=`Added ${tasks.length} task${tasks.length>1?'s':''}.`;
+      let added = 0;
+      if(tag==='faye'){
+        tasks.forEach(t=>{ if(!_skipIfDuplicate(t.title,'quick-capture')) { addFT(t.title,t.client||'doherty',t.hz||'week',t.priority||'med',t.note||''); added++; } });
+      } else if(tag==='aaron'){
+        tasks.forEach(t=>{ addAT(t.title,t.hz||'week',t.priority||'med',t.note||''); added++; });
+      } else {
+        // Use Claude's workspace classification if available, fall back to selected tag
+        tasks.forEach(t=>{
+          const taskTag = t.workspace || t.tag || tag;
+          if(taskTag === 'aaron'){ addAT(t.title,t.hz||'week',t.priority||'med',t.note||''); }
+          else if(taskTag === 'faye'){ addFT(t.title,t.client||'doherty',t.hz||'week',t.priority||'med',t.note||''); }
+          else { addTask(t.title,taskTag,t.hz||'week',t.priority||'med',t.note||''); }
+          added++;
+        });
+      }
+      // Final render pass to make sure everything is visible
+      render(); renderFaye(); renderAaron(); updateBadges(); metrics();
+      if(added > 0){
+        aitxt.textContent=`✓ Added ${added} task${added>1?'s':''} to My Priorities.`;
+      } else {
+        aitxt.textContent='All items already exist in your dashboard.';
+      }
       document.getElementById('cap-txt').value='';
     }else{aitxt.textContent='Could not parse. Try adding manually.';}
   }catch(e){aitxt.textContent='Parse failed.';}
