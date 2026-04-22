@@ -2064,7 +2064,11 @@ async function loadFromServer(){
   if(!_serverSyncEnabled) return;
   try{
     const r = await fetch('/api/state', { credentials: 'include', cache: 'no-store' });
-    if(!r.ok){ _serverSyncEnabled = false; return; }
+    if(!r.ok){
+      if(r.status === 401) console.warn('[sync] Auth error on load — will retry on next save');
+      else _serverSyncEnabled = false; // only disable for non-auth errors
+      return;
+    }
     const { state } = await r.json();
     if(!state) return; // Nothing saved server-side yet
     // Only apply if server state is newer than what we have
@@ -2107,7 +2111,9 @@ async function _syncToServer(){
     });
     if(!r.ok){
       console.warn('[sync] Server save failed:', r.status);
-      if(r.status === 401) _serverSyncEnabled = false; // not authed
+      // Don't permanently disable — session may refresh
+    } else {
+      _serverSyncEnabled = true; // confirm still working
     }
   }catch(e){
     console.warn('[sync] Server sync failed:', e.message);
