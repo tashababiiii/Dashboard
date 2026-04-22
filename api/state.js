@@ -19,7 +19,14 @@ async function getUserEmail(req) {
   if (!tokenCookie) return null;
 
   let tokens;
-  try { tokens = JSON.parse(tokenCookie); } catch(e) { return null; }
+  try {
+    // Cookie is Base64-encoded JSON (same format as auth.js sets it)
+    const decoded = Buffer.from(tokenCookie, 'base64').toString('utf8');
+    tokens = JSON.parse(decoded);
+  } catch(e) {
+    // Try raw JSON as fallback (in case cookie format changes)
+    try { tokens = JSON.parse(tokenCookie); } catch(e2) { return null; }
+  }
 
   // If email was cached in the token object, use it directly
   if (tokens.email && ALLOWED_EMAILS.includes(tokens.email)) return tokens.email;
