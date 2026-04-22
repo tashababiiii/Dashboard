@@ -254,6 +254,10 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 .td-meta{font-family:'DM Mono',monospace;font-size:11px;color:var(--t3);padding:10px 12px;background:var(--s2);border-radius:3px;border:1px solid var(--bm);}
 .td-priority-btns{display:flex;gap:6px;}
 .td-pri-btn{flex:1;padding:7px;border:1px solid var(--bm);border-radius:3px;background:none;cursor:pointer;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);transition:all .15s;}
+.td-pri-btn.active-high{background:rgba(184,50,72,.15);color:var(--rose);border-color:var(--rose);}
+.td-pri-btn.active-med{background:rgba(200,130,0,.12);color:var(--gold);border-color:var(--gold);}
+.td-pri-btn.active-low{background:rgba(21,122,64,.12);color:var(--sage);border-color:var(--sage);}
+.td-pri-btn.active-hold{background:rgba(94,32,192,.12);color:var(--violet);border-color:var(--violet);}
 .td-pri-btn.active-high{border-color:var(--rose);color:var(--rose);background:rgba(212,32,32,.08);}
 .td-pri-btn.active-med{border-color:var(--gold);color:var(--gold);background:rgba(0,119,182,.08);}
 .td-pri-btn.active-low{border-color:var(--sage);color:var(--sage);background:rgba(21,122,64,.08);}
@@ -1640,6 +1644,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
         <button class="td-pri-btn" id="td-pri-high" onclick="setDrawerPriority('high')">⬆ High</button>
         <button class="td-pri-btn" id="td-pri-med" onclick="setDrawerPriority('med')">→ Med</button>
         <button class="td-pri-btn" id="td-pri-low" onclick="setDrawerPriority('low')">⬇ Low</button>
+        <button class="td-pri-btn" id="td-pri-hold" onclick="setDrawerPriority('hold')">⏸ On Hold</button>
       </div>
     </div>
 
@@ -1686,6 +1691,17 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
           <option value="rhodes">Rhodes</option>
         </select>
       </div>
+    </div>
+
+    <div class="td-field">
+      <div class="td-label">Status</div>
+      <select class="td-select" id="td-status" onchange="handleDrawerStatusChange(this.value)">
+        <option value="queue">📋 In Queue</option>
+        <option value="active">▶ Active</option>
+        <option value="hold">⏸ On Hold</option>
+        <option value="review">👁 In Review</option>
+      </select>
+      <div id="td-status-note" style="font-family:'DM Mono',monospace;font-size:8px;color:var(--violet);margin-top:4px;display:none;">⟳ This task will be added to Waiting On when saved</div>
     </div>
 
     <div class="td-field">
@@ -3217,7 +3233,7 @@ function render(){
       <div class="t-bar ${t.priority}"></div>
       <div class="t-body" onclick="openTaskDrawer(${t.id},'${t._type||'main'}')" style="cursor:pointer;flex:1;">
         <div class="t-tags"><span class="tag t-${t.tag}">${t._type==='faye'&&t.client?`Faye · ${t.client.charAt(0).toUpperCase()+t.client.slice(1)}`:(tagLabel[t.tag]||t.tag)}</span>${t.note||t.source?`<span class="t-note">${t.source||t.note}</span>`:''}</div>
-        <div class="task-title" id="tt-${t.id}">${t.title}${t.detailNotes?` <span style="font-size:11px;color:var(--t3);font-family:'DM Mono',monospace;">···</span>`:''}${t.due?`<span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);margin-left:6px;">due ${t.due}</span>`:''}${t.effort&&t.effort!=='standard'?`<span style="font-family:'DM Mono',monospace;font-size:8px;color:var(--t3);margin-left:5px;">${t.effort==='quick'?'⚡':'🧠'}</span>`:''}</div>
+        <div class="task-title" id="tt-${t.id}">${t.title}${t.detailNotes?` <span style="font-size:11px;color:var(--t3);font-family:'DM Mono',monospace;">···</span>`:''}${t.due?`<span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);margin-left:6px;">due ${t.due}</span>`:''}${t.effort&&t.effort!=='standard'?`<span style="font-family:'DM Mono',monospace;font-size:8px;color:var(--t3);margin-left:5px;">${t.effort==='quick'?'⚡':'🧠'}</span>`:''}${t.status&&t.status!=='queue'?`<span style="font-family:'DM Mono',monospace;font-size:7px;padding:1px 4px;border-radius:2px;margin-left:5px;${t.status==='active'?'background:rgba(21,122,64,.15);color:var(--sage);':t.status==='hold'?'background:rgba(94,32,192,.12);color:var(--violet);':'background:rgba(74,144,217,.15);color:var(--blue);'}">${t.status==='active'?'▶ Active':t.status==='hold'?'⏸ Hold':'👁 Review'}</span>`:''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;">
         <div class="t-check" onclick="toggleTask(${t.id},'${t._type||'main'}')"></div>
@@ -5075,6 +5091,11 @@ const EFFORT_META = {
   deep:     { label: '🧠 Deep',     desc: '1+ hours · high judgment / output', pts: 13 }
 };
 
+
+function handleDrawerStatusChange(val){
+  const note = document.getElementById('td-status-note');
+  if(note) note.style.display = val === 'review' ? 'block' : 'none';
+}
 function setDrawerEffort(e){
   _drawerEffort = e;
   updateDrawerEffortBtns();
@@ -5109,9 +5130,24 @@ function openTaskDrawer(id, type='main'){
   document.getElementById('td-due').value = t.due || '';
   document.getElementById('td-source').value = t.source || t.note || '';
 
-  // Horizon
+  // Horizon — set by value and confirm via selectedIndex fallback
   const hzEl = document.getElementById('td-hz');
-  if(hzEl) hzEl.value = t.hz || 'today';
+  if(hzEl){
+    hzEl.value = t.hz || 'today';
+    // Fallback: if value didn't stick (e.g. mismatch), find the matching option
+    if(hzEl.value !== (t.hz || 'today')){
+      const opts = Array.from(hzEl.options);
+      const match = opts.findIndex(o => o.value === (t.hz || 'today'));
+      if(match >= 0) hzEl.selectedIndex = match;
+    }
+  }
+
+  // Status
+  const statusEl = document.getElementById('td-status');
+  if(statusEl){
+    statusEl.value = t.status || 'queue';
+    handleDrawerStatusChange(t.status || 'queue');
+  }
 
   // Tag (main tasks only) + Faye client selector
   const tagEl = document.getElementById('td-tag');
@@ -5170,8 +5206,9 @@ function setDrawerPriority(p){
 }
 
 function updateDrawerPriorityBtns(){
-  ['high','med','low'].forEach(p => {
+  ['high','med','low','hold'].forEach(p => {
     const btn = document.getElementById(`td-pri-${p}`);
+    if(!btn) return;
     btn.className = 'td-pri-btn' + (_drawerPriority===p ? ` active-${p}` : '');
   });
 }
@@ -5196,6 +5233,30 @@ function saveTaskDrawer(){
   t.priority = _drawerPriority || t.priority || 'med';
   t.effort = _drawerEffort || t.effort || 'standard';
   t.hz = document.getElementById('td-hz').value || t.hz || 'today';
+
+  // Status — save and handle In Review → Waiting On
+  const newStatus = document.getElementById('td-status')?.value || t.status || 'queue';
+  const prevStatus = t.status;
+  t.status = newStatus;
+
+  // If task is tagged In Review, add to Waiting On automatically
+  if(newStatus === 'review' && prevStatus !== 'review'){
+    if(!S.waitingOn) S.waitingOn = {};
+    const ws = type === 'faye' ? 'faye' : type === 'aaron' ? 'aaron' : (t.tag === 'personal' ? 'personal' : '645');
+    if(!S.waitingOn[ws]) S.waitingOn[ws] = [];
+    // Only add if not already in Waiting On
+    const alreadyThere = Object.values(S.waitingOn).flat().some(w => w.taskRef === t.id);
+    if(!alreadyThere){
+      S.waitingOn[ws].push({
+        id: 'wo_' + Date.now(),
+        taskRef: t.id,
+        what: t.title,
+        who: 'Waiting for review',
+        since: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'}),
+        workspace: ws
+      });
+    }
+  }
 
   // Tag only applies to main tasks — faye uses client, aaron is its own array
   if(type==='main'){
