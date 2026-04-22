@@ -3114,6 +3114,7 @@ function _isDuplicate(title){
 let _dedupSkipCount = 0;
 let _dedupToastTimer = null;
 function _skipIfDuplicate(title, source){
+  if(!title || !title.trim()) return false; // never block empty titles
   const dupe = _isDuplicate(title);
   if(dupe){
     console.log(`[Dedup] Skipped "${title}" — matches existing: "${dupe.title}" (${source})`);
@@ -4317,6 +4318,11 @@ function addCapturedFileTask(i) {
     el.style.background  = 'rgba(21,122,64,.08)';
     el.innerHTML = `<div style="font-size:12px;color:var(--sage);width:100%;">✓ Added to dashboard</div>`;
     el.onclick = null;
+  }
+
+  // Clear from _capturedFileTasks so it doesn't trigger dedup for subsequent cards
+  if (window._capturedFileTasks && window._capturedFileTasks[i]) {
+    window._capturedFileTasks[i]._added = true;
   }
 
   save(); render(); renderFaye(); renderAaron(); updateBadges();
