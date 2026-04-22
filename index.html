@@ -3092,7 +3092,7 @@ function _normTitle(t){ return (t||'').toLowerCase().replace(/[^a-z0-9]/g,''); }
 // Checks all task arrays. Match = normalised title ≥ 80% character overlap
 function _isDuplicate(title){
   const norm = _normTitle(title);
-  if(norm.length < 4) return null; // too short to fuzzy match reliably
+  if(norm.length < 6) return null; // too short to match reliably
   const all = [
     ...S.tasks.filter(t=>!t.done),
     ...S.fayeTasks.filter(t=>!t.done),
@@ -3100,14 +3100,11 @@ function _isDuplicate(title){
   ];
   for(const t of all){
     const tn = _normTitle(t.title);
-    // Exact match
+    // Exact match only
     if(tn === norm) return t;
-    // Substring match (one contains the other)
-    if(norm.length >= 6 && (tn.includes(norm) || norm.includes(tn))) return t;
-    // Similarity: count matching chars / max length
-    const longer = Math.max(norm.length, tn.length);
-    const shorter = Math.min(norm.length, tn.length);
-    if(shorter / longer >= 0.85) return t; // 85% length similarity + starts same
+    // Substring match — one fully contains the other AND shorter is at least 10 chars
+    // (prevents short common words matching long unrelated titles)
+    if(norm.length >= 10 && tn.length >= 10 && (tn.includes(norm) || norm.includes(tn))) return t;
   }
   return null;
 }
