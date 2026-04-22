@@ -2036,44 +2036,111 @@ let S={
   iop_start: '2026-02-16', // approximate 180-day plan start
 };
 
+// ── STATE SYNC (cross-device via server + cross-tab via storage event) ─────
+
+let _saveTimer = null;
+let _serverSyncEnabled = true; // flips to false if server is unavailable
+
+function _applyState(p){
+  S = {...S, ...p};
+  if(Array.isArray(p.tasks))       S.tasks       = p.tasks;
+  if(Array.isArray(p.fayeTasks))   S.fayeTasks   = p.fayeTasks;
+  if(Array.isArray(p.aaronTasks))  S.aaronTasks  = p.aaronTasks;
+  if(Array.isArray(p.delegations)) S.delegations = p.delegations;
+  if(p.waitingOn) S.waitingOn = p.waitingOn;
+  if(p.completedMetrics) S.completedMetrics = p.completedMetrics;
+  if(Array.isArray(p.capacityCheckins)) S.capacityCheckins = p.capacityCheckins;
+}
+
 function load(){
   try{
-    const d=localStorage.getItem(KEY);
-    if(d){
-      const p=JSON.parse(d);
-      // Deep merge arrays (tasks, fayeTasks, etc.) from saved state
-      S={...S,...p};
-      // Ensure critical arrays are always from saved state, not defaults
-      if(Array.isArray(p.tasks)) S.tasks = p.tasks;
-      if(Array.isArray(p.fayeTasks)) S.fayeTasks = p.fayeTasks;
-      if(Array.isArray(p.aaronTasks)) S.aaronTasks = p.aaronTasks;
-      if(Array.isArray(p.delegations)) S.delegations = p.delegations;
-    }
-  }catch(e){console.error('[load] Failed:',e);}
+    const d = localStorage.getItem(KEY);
+    if(d){ _applyState(JSON.parse(d)); }
+  }catch(e){ console.error('[load] localStorage failed:', e); }
 }
+
+async function loadFromServer(){
+  // Called once on init — pulls server state if newer than local
+  if(!_serverSyncEnabled) return;
+  try{
+    const r = await fetch('/api/state', { credentials: 'include', cache: 'no-store' });
+    if(!r.ok){ _serverSyncEnabled = false; return; }
+    const { state } = await r.json();
+    if(!state) return; // Nothing saved server-side yet
+    // Only apply if server state is newer than what we have
+    if(!S._savedAt || (state._savedAt && state._savedAt > S._savedAt)){
+      console.log('[sync] Applying server state (newer than local)');
+      _applyState(state);
+      // Persist to localStorage too
+      localStorage.setItem(KEY, JSON.stringify(S));
+      // Re-render everything
+      render(); renderFaye(); renderAaron(); updateBadges(); metrics();
+      autoUpdateCapacity();
+      _showSyncToast('↓ Synced from server');
+    }
+  }catch(e){
+    console.warn('[sync] Server load failed:', e.message);
+    _serverSyncEnabled = false;
+  }
+}
+
 function save(){
   try{
     S._savedAt = Date.now();
-    localStorage.setItem(KEY,JSON.stringify(S));
-  }catch(e){console.error('[save] Failed:',e);}
+    localStorage.setItem(KEY, JSON.stringify(S));
+  }catch(e){ console.error('[save] localStorage failed:', e); }
+  // Debounce server sync — don't hammer the API on every keystroke
+  if(_serverSyncEnabled){
+    clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(_syncToServer, 1500);
+  }
 }
-// Sync state across tabs — if another tab saves a newer version, reload
+
+async function _syncToServer(){
+  if(!_serverSyncEnabled) return;
+  try{
+    const r = await fetch('/api/state', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(S)
+    });
+    if(!r.ok){
+      console.warn('[sync] Server save failed:', r.status);
+      if(r.status === 401) _serverSyncEnabled = false; // not authed
+    }
+  }catch(e){
+    console.warn('[sync] Server sync failed:', e.message);
+    // Don't disable — could be transient network issue
+  }
+}
+
+function _showSyncToast(msg){
+  let t = document.getElementById('sync-toast');
+  if(!t){
+    t = document.createElement('div');
+    t.id = 'sync-toast';
+    t.style.cssText = 'position:fixed;bottom:80px;right:16px;background:var(--s2);border:1px solid var(--bm);border-radius:4px;font-family:"DM Mono",monospace;font-size:9px;color:var(--t3);padding:5px 10px;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  setTimeout(()=>{ t.style.opacity='0'; }, 2500);
+}
+
+// Cross-tab sync — when another tab saves, apply its state if newer
 window.addEventListener('storage', e => {
   if(e.key !== KEY || !e.newValue) return;
   try{
     const incoming = JSON.parse(e.newValue);
     if(incoming._savedAt && S._savedAt && incoming._savedAt > S._savedAt){
-      // Another tab has a newer save — reload state from storage
-      const p = incoming;
-      S = {...S, ...p};
-      if(Array.isArray(p.tasks)) S.tasks = p.tasks;
-      if(Array.isArray(p.fayeTasks)) S.fayeTasks = p.fayeTasks;
-      if(Array.isArray(p.aaronTasks)) S.aaronTasks = p.aaronTasks;
-      if(Array.isArray(p.delegations)) S.delegations = p.delegations;
+      _applyState(incoming);
       render(); renderFaye(); renderAaron(); updateBadges(); metrics();
     }
   }catch(e){}
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ── CLOCK & IOP DAYS ──
 function tick(){
@@ -6294,18 +6361,18 @@ function updateNowStrip(evts, calType){
 }
 
 // ── INIT ──
-load();
+load();                                         // 1. Load from localStorage immediately
 tick(); setInterval(tick, 60000);
 calcIOP(); setInterval(calcIOP, 60000);
-setInterval(updateNowStrip, 60000); // refresh Now/Up Next every minute
+setInterval(updateNowStrip, 60000);
 seed();
 render(); renderFaye(); renderAaron(); renderDelegation();
 loadFocus(); metrics(); updateBadges();
 if(S.capacityOverride){ renderCapacityUI(S.capacity); } else { autoUpdateCapacity(); }
-// cap-slider removed
 renderSparkline();
 _resetDailyCheckin();
 loadCalendars(); setInterval(loadCalendars, 30*60*1000);
+loadFromServer();                               // 2. Pull server state async — applies if newer
 
 // Restore saved workspace and column visibility
 (function initColumns(){
