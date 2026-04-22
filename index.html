@@ -2036,8 +2036,44 @@ let S={
   iop_start: '2026-02-16', // approximate 180-day plan start
 };
 
-function load(){try{const d=localStorage.getItem(KEY);if(d){const p=JSON.parse(d);S={...S,...p};}}catch(e){}}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+function load(){
+  try{
+    const d=localStorage.getItem(KEY);
+    if(d){
+      const p=JSON.parse(d);
+      // Deep merge arrays (tasks, fayeTasks, etc.) from saved state
+      S={...S,...p};
+      // Ensure critical arrays are always from saved state, not defaults
+      if(Array.isArray(p.tasks)) S.tasks = p.tasks;
+      if(Array.isArray(p.fayeTasks)) S.fayeTasks = p.fayeTasks;
+      if(Array.isArray(p.aaronTasks)) S.aaronTasks = p.aaronTasks;
+      if(Array.isArray(p.delegations)) S.delegations = p.delegations;
+    }
+  }catch(e){console.error('[load] Failed:',e);}
+}
+function save(){
+  try{
+    S._savedAt = Date.now();
+    localStorage.setItem(KEY,JSON.stringify(S));
+  }catch(e){console.error('[save] Failed:',e);}
+}
+// Sync state across tabs — if another tab saves a newer version, reload
+window.addEventListener('storage', e => {
+  if(e.key !== KEY || !e.newValue) return;
+  try{
+    const incoming = JSON.parse(e.newValue);
+    if(incoming._savedAt && S._savedAt && incoming._savedAt > S._savedAt){
+      // Another tab has a newer save — reload state from storage
+      const p = incoming;
+      S = {...S, ...p};
+      if(Array.isArray(p.tasks)) S.tasks = p.tasks;
+      if(Array.isArray(p.fayeTasks)) S.fayeTasks = p.fayeTasks;
+      if(Array.isArray(p.aaronTasks)) S.aaronTasks = p.aaronTasks;
+      if(Array.isArray(p.delegations)) S.delegations = p.delegations;
+      render(); renderFaye(); renderAaron(); updateBadges(); metrics();
+    }
+  }catch(e){}
+});
 
 // ── CLOCK & IOP DAYS ──
 function tick(){
@@ -3093,19 +3129,26 @@ function _normTitle(t){ return (t||'').toLowerCase().replace(/[^a-z0-9]/g,''); }
 function _isDuplicate(title){
   const norm = _normTitle(title);
   if(norm.length < 6) return null; // too short to match reliably
-  const all = [
+
+  // Check open tasks
+  const openTasks = [
     ...S.tasks.filter(t=>!t.done),
     ...S.fayeTasks.filter(t=>!t.done),
     ...S.aaronTasks.filter(t=>!t.done)
   ];
-  for(const t of all){
+  for(const t of openTasks){
     const tn = _normTitle(t.title);
-    // Exact match only
     if(tn === norm) return t;
-    // Substring match — one fully contains the other AND shorter is at least 10 chars
-    // (prevents short common words matching long unrelated titles)
     if(norm.length >= 10 && tn.length >= 10 && (tn.includes(norm) || norm.includes(tn))) return t;
   }
+
+  // Also check recently completed tasks (last 7 days) to prevent re-adding finished work
+  const sevenDaysAgo = Date.now() - 7 * 86400000;
+  const recentLog = (S.completedMetrics?.log || []).filter(e => new Date(e.date).getTime() > sevenDaysAgo);
+  for(const e of recentLog){
+    if(_normTitle(e.title) === norm) return { title: e.title, done: true };
+  }
+
   return null;
 }
 
@@ -4862,8 +4905,13 @@ async function loadAsanaTasksForMorning(){
       el.textContent=tasks.map(t=>`${t.name}${t.due?' (due '+t.due+')':''}`).join(' · ');
       // Also add to dashboard as 645 tasks if not already there
       tasks.forEach(t=>{
-        const exists=S.tasks.some(st=>st.title===t.name);
-        if(!exists)addTask(t.name,'645',t.due?'today':'week','med','From Asana');
+        // Check ALL task arrays including completed — don't re-add things already done/deleted
+        const existsAnywhere =
+          S.tasks.some(st=>st.title===t.name) ||
+          S.aaronTasks.some(st=>st.title===t.name) ||
+          (S.completedMetrics?.log||[]).some(l=>l.title===t.name);
+        if(!existsAnywhere && !_skipIfDuplicate(t.name,'asana-load'))
+          addTask(t.name,'645',t.due?'today':'week','med','From Asana');
       });
     }else{
       el.textContent='No open tasks found';
