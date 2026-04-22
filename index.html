@@ -746,6 +746,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
       <div id="smart-sync-loading" style="display:none;font-family:'DM Mono',monospace;font-size:9px;color:var(--t3);padding:4px 2px;">Scanning…</div>
       <div id="smart-sync-empty" style="display:none;font-family:'DM Mono',monospace;font-size:9px;color:var(--t3);padding:4px 2px;">Nothing new found.</div>
       <div id="smart-sync-results" style="margin-top:4px;max-height:180px;overflow-y:auto;"></div>
+      <div id="smart-sync-confirm" style="display:none;margin-top:6px;padding:7px 10px;border-radius:3px;font-family:'DM Mono',monospace;font-size:10px;text-align:center;"></div>
     </div>
     <!-- Navigation -->
     <nav class="rail-nav">
@@ -898,6 +899,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
           <div class="hz-tabs" id="my-hz">
             <button class="hz-tab active" onclick="setHz('today',this)">Today<span class="hz-cnt" id="c-today">0</span></button>
             <button class="hz-tab" onclick="setHz('week',this)">Week<span class="hz-cnt" id="c-week">0</span></button>
+            <button class="hz-tab" onclick="setHz('next-week',this)">Next Wk<span class="hz-cnt" id="c-next-week">0</span></button>
             <button class="hz-tab" onclick="setHz('month',this)">Month<span class="hz-cnt" id="c-month">0</span></button>
             <button class="hz-tab" onclick="setHz('someday',this)">Someday<span class="hz-cnt" id="c-someday">0</span></button>
             <button class="hz-tab" onclick="setHz('completed',this)" style="color:var(--sage);">✓ Done<span class="hz-cnt" id="c-completed" style="background:rgba(21,122,64,.12);color:var(--sage);">0</span></button>
@@ -925,6 +927,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
             <select class="mini-sel" id="new-hz">
               <option value="today">Today</option>
               <option value="week">Week</option>
+              <option value="next-week">Next Week</option>
               <option value="month">Month</option>
               <option value="someday">Someday</option>
             </select>
@@ -1422,6 +1425,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
       <div style="display:flex;gap:8px;padding:0 20px;margin-bottom:14px;">
         <button onclick="mobileSetHz(this,'today')" style="flex:1;padding:8px;border-radius:6px;background:var(--gold-d);font-family:'DM Mono',monospace;font-size:10px;color:var(--gold);border:1px solid rgba(176,122,48,.2);min-height:44px;">Today</button>
         <button onclick="mobileSetHz(this,'week')" style="flex:1;padding:8px;border-radius:6px;background:var(--s2);font-family:'DM Mono',monospace;font-size:10px;color:var(--t2);border:1px solid var(--b);min-height:44px;">Week</button>
+        <button onclick="mobileSetHz(this,'next-week')" style="flex:1;padding:8px;border-radius:6px;background:var(--s2);font-family:'DM Mono',monospace;font-size:10px;color:var(--t2);border:1px solid var(--b);min-height:44px;">Next Wk</button>
         <button onclick="mobileSetHz(this,'month')" style="flex:1;padding:8px;border-radius:6px;background:var(--s2);font-family:'DM Mono',monospace;font-size:10px;color:var(--t2);border:1px solid var(--b);min-height:44px;">Month</button>
       </div>
       <button onclick="mobileAddTask()" style="width:calc(100% - 40px);margin:0 20px;padding:14px;background:var(--t);border:none;border-radius:8px;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--bg);cursor:pointer;min-height:44px;">Add task →</button>
@@ -1665,6 +1669,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
         <select class="td-select" id="td-hz">
           <option value="today">Today</option>
           <option value="week">This Week</option>
+          <option value="next-week">Next Week</option>
           <option value="month">This Month</option>
           <option value="someday">Someday</option>
         </select>
@@ -2927,7 +2932,7 @@ function calcAutoCapacity(){
   function taskPts(t, isToday){
     const base = effortPts[t.effort || 'standard'];
     const priorityMult = t.priority === 'high' ? 1.2 : t.priority === 'low' ? 0.8 : 1;
-    const horizonMult  = isToday ? 1 : 0.25; // non-today tasks are background load
+    const horizonMult  = isToday ? 1 : (t.hz === 'week' || t.hz === 'next-week') ? 0.25 : 0.1; // next-week/month/someday are lighter background load
     return base * priorityMult * horizonMult;
   }
 
@@ -3076,7 +3081,7 @@ function renderCapacityUI(v){
 }
 
 // ── TASK MANAGEMENT ──
-const pOrd={high:0,med:1,low:2};
+const pOrd={high:0,med:1,low:2,hold:3};
 const tagLabel={645:'Office & Events',personal:'Personal',aaron:'Ops Support',strategic:'Strategic',office:'Office & Events',faye:'Faye'};
 
 // ── DUPLICATE DETECTION ────────────────────────────────────────────────────
@@ -3240,7 +3245,7 @@ function render(){
         <button onclick="event.stopPropagation();deleteTaskUnified(${t.id},'${t._type||'main'}')" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px;border-radius:2px;transition:color .15s;" onmouseover="this.style.color='var(--rose)'" onmouseout="this.style.color='var(--t3)'">✕</button>
       </div>
     </div>`).join(''):'<div class="empty-msg">Nothing here yet.</div>';
-  ['today','week','month','someday'].forEach(hz=>{
+  ['today','week','next-week','month','someday'].forEach(hz=>{
     const el=document.getElementById(`c-${hz}`);
     if(!el) return;
     let count = 0;
@@ -3276,7 +3281,7 @@ function renderFaye(){
   const c=document.getElementById('faye-clients');
   const show=S.ws==='all'||S.ws==='faye';
   const visibleCount = S.fayeTasks.filter(t=>!t.done).length;
-  ['today','week','month','someday'].forEach(hz=>{const el=document.getElementById(`fc-${hz}`);if(el)el.textContent=show?S.fayeTasks.filter(t=>t.hz===hz&&!t.done).length:0;});
+  ['today','week','next-week','month','someday'].forEach(hz=>{const el=document.getElementById(`fc-${hz}`);if(el)el.textContent=show?S.fayeTasks.filter(t=>t.hz===hz&&!t.done).length:0;});
   document.getElementById('faye-meta').textContent=show?`${visibleCount} open`:'filtered';
   if(!show){c.innerHTML=`<div class="empty-msg" style="color:var(--t3);font-size:13px;padding:16px 18px;">Switch to <strong>All</strong> or <strong>Faye Clients</strong> to see Faye tasks.</div>`;return;}
   c.innerHTML=CLIENTS.map(client=>{
@@ -5568,15 +5573,22 @@ async function runSmartSync(){
 
     results.style.display = 'block';
 
-    // Add mark-done button
-    if(!document.getElementById('sync-apply-btn')){
-      const applyBtn = document.createElement('button');
+    // Add/update mark-done button — always recreate so it's fresh after each scan
+    let applyBtn = document.getElementById('sync-apply-btn');
+    if(!applyBtn){
+      applyBtn = document.createElement('button');
       applyBtn.id = 'sync-apply-btn';
-      applyBtn.textContent = 'Mark selected done ✓';
       applyBtn.style.cssText = "width:100%;margin-top:6px;padding:6px;background:var(--sage);border:none;border-radius:3px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.07em;text-transform:uppercase;color:#fff;cursor:pointer;";
       applyBtn.onclick = applySmartSync;
       results.after(applyBtn);
     }
+    const matchCount2 = found.filter(i=>i._matchedTask).length;
+    applyBtn.textContent = matchCount2 > 0
+      ? `Mark ${matchCount2} done ✓`
+      : 'No matches found — cannot mark done';
+    applyBtn.disabled = matchCount2 === 0;
+    applyBtn.style.opacity = matchCount2 > 0 ? '1' : '0.5';
+    applyBtn.style.display = 'block';
 
   } catch(e) {
     loading.style.display = 'none';
@@ -5618,9 +5630,28 @@ function applySmartSync(){
   const syncApplyBtn = document.getElementById('sync-apply-btn');
   if(syncApplyBtn) syncApplyBtn.style.display = 'none';
 
-  document.getElementById('smart-sync-status').textContent = markedDone > 0
-    ? `✓ ${markedDone} task${markedDone>1?'s':''} marked done`
-    : 'No matches found — use Email Scan or Slack Scan to add new tasks';
+  // Reset the status span to default
+  const statusSpan = document.getElementById('smart-sync-status');
+  if(statusSpan) statusSpan.textContent = 'Gmail · Slack · Cal';
+
+  // Show clear confirmation in the dedicated confirm div
+  const confirmEl = document.getElementById('smart-sync-confirm');
+  if(confirmEl){
+    confirmEl.style.display = 'block';
+    if(markedDone > 0){
+      confirmEl.style.background = 'rgba(21,122,64,.12)';
+      confirmEl.style.color = 'var(--sage)';
+      confirmEl.style.border = '1px solid rgba(21,122,64,.25)';
+      confirmEl.innerHTML = `✓ <strong>${markedDone} task${markedDone>1?'s':''} marked done</strong>`;
+      setTimeout(()=>{ confirmEl.style.display='none'; }, 5000);
+    } else {
+      confirmEl.style.background = 'var(--s2)';
+      confirmEl.style.color = 'var(--t3)';
+      confirmEl.style.border = '1px solid var(--b)';
+      confirmEl.innerHTML = 'No dashboard matches found';
+      setTimeout(()=>{ confirmEl.style.display='none'; }, 4000);
+    }
+  }
 }
 
 // ── AGENT QUEUE ──
