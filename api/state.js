@@ -1,7 +1,6 @@
-// /api/state.js — Cross-device state sync via Vercel KV REST API
-// Uses fetch() directly — no @vercel/kv package needed
+// /api/state.js — Cross-device state sync using REDIS_URL (standard Redis)
 // GET  /api/state        → returns saved state
-// POST /api/state        → saves state
+// POST /api/state        → saves state  
 // GET  /api/state?debug  → diagnostic info
 
 const { parseCookies, setCorsHeaders, getOAuth2Client, refreshTokenIfNeeded } = require('./_utils');
@@ -10,34 +9,21 @@ const { google } = require('googleapis');
 const STATE_TTL = 60 * 60 * 24 * 90; // 90 days in seconds
 const ALLOWED_EMAILS = ['nbradley@645ventures.com', 'natashapbradley@gmail.com'];
 
-// Call Vercel KV REST API directly — no SDK needed
-async function kvGet(key) {
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
-  if (!url || !token) throw new Error('KV env vars not set');
-  const r = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
-    headers: { Authorization: `Bearer ${token}` }
+// Lazy Redis client — created once and reused across warm invocations
+let _redis = null;
+async function getRedis() {
+  if (_redis) return _redis;
+  const url = process.env.REDIS_URL;
+  if (!url) throw new Error('REDIS_URL env var not set');
+  const Redis = require('ioredis');
+  _redis = new Redis(url, { 
+    tls: url.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
+    lazyConnect: true,
+    maxRetriesPerRequest: 2,
+    connectTimeout: 5000,
   });
-  if (!r.ok) throw new Error(`KV GET failed: ${r.status}`);
-  const { result } = await r.json();
-  if (!result) return null;
-  return typeof result === 'string' ? JSON.parse(result) : result;
-}
-
-async function kvSet(key, value, ttl) {
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
-  if (!url || !token) throw new Error('KV env vars not set');
-  const body = ttl
-    ? ['SET', key, JSON.stringify(value), 'EX', ttl]
-    : ['SET', key, JSON.stringify(value)];
-  const r = await fetch(`${url}/pipeline`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify([body])
-  });
-  if (!r.ok) throw new Error(`KV SET failed: ${r.status}`);
-  return true;
+  await _redis.connect().catch(() => {}); // connect eagerly, ignore if already connected
+  return _redis;
 }
 
 async function getUserEmail(req) {
@@ -54,9 +40,7 @@ async function getUserEmail(req) {
     catch(e2) { return { email: null, step: 'cookie_parse_failed' }; }
   }
 
-  if (!tokens || typeof tokens !== 'object') {
-    return { email: null, step: 'tokens_not_object' };
-  }
+  if (!tokens || typeof tokens !== 'object') return { email: null, step: 'tokens_not_object' };
 
   // Email stored in token by updated auth.js
   if (tokens.email) {
@@ -89,19 +73,15 @@ module.exports = async (req, res) => {
   // Debug endpoint
   if (req.method === 'GET' && req.query?.debug !== undefined) {
     const { email, step, hint } = await getUserEmail(req);
-    const hasKvUrl = !!process.env.KV_REST_API_URL;
-    const hasKvToken = !!process.env.KV_REST_API_TOKEN;
-    // Test KV connectivity
-    let kvOk = false, kvError = null;
-    if (hasKvUrl && hasKvToken) {
-      try { await kvGet('__ping__'); kvOk = true; }
-      catch(e) { kvError = e.message; }
+    const hasRedisUrl = !!process.env.REDIS_URL;
+    let redisOk = false, redisError = null;
+    if (hasRedisUrl) {
+      try { const r = await getRedis(); await r.ping(); redisOk = true; }
+      catch(e) { redisError = e.message; }
     }
     return res.status(200).json({
       authStep: step, authHint: hint || null, authed: !!email,
-      kvEnvVarsSet: hasKvUrl && hasKvToken,
-      kvConnected: kvOk, kvError,
-      envVars: { KV_REST_API_URL: hasKvUrl, KV_REST_API_TOKEN: hasKvToken }
+      redisUrlSet: hasRedisUrl, redisConnected: redisOk, redisError,
     });
   }
 
@@ -114,9 +94,12 @@ module.exports = async (req, res) => {
   const key = `dashboard:${email.replace(/[^a-z0-9@._-]/gi, '_')}`;
 
   try {
+    const redis = await getRedis();
+
     if (req.method === 'GET') {
-      const state = await kvGet(key);
-      return res.status(200).json({ state: state || null });
+      const raw = await redis.get(key);
+      if (!raw) return res.status(200).json({ state: null });
+      return res.status(200).json({ state: JSON.parse(raw) });
     }
 
     if (req.method === 'POST') {
@@ -134,25 +117,21 @@ module.exports = async (req, res) => {
         return res.status(413).json({ error: 'State too large — max 512KB' });
       }
       body._savedAt = Date.now();
-      await kvSet(key, body, STATE_TTL);
+      await redis.setex(key, STATE_TTL, JSON.stringify(body));
       return res.status(200).json({ ok: true, savedAt: body._savedAt });
     }
 
     if (req.method === 'DELETE') {
-      const url = process.env.KV_REST_API_URL;
-      const token = process.env.KV_REST_API_TOKEN;
-      await fetch(`${url}/del/${encodeURIComponent(key)}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const redis = await getRedis();
+      await redis.del(key);
       return res.status(200).json({ ok: true });
     }
 
     return res.status(405).json({ error: 'Method not allowed' });
 
   } catch (error) {
-    console.error('[state] Error:', error.message);
-    if (req.method === 'GET') return res.status(200).json({ state: null, kvError: error.message });
+    console.error('[state] Redis error:', error.message);
+    if (req.method === 'GET') return res.status(200).json({ state: null, redisError: error.message });
     return res.status(500).json({ error: 'State sync failed', detail: error.message });
   }
 };
