@@ -6380,6 +6380,14 @@ _resetDailyCheckin();
 loadCalendars(); setInterval(loadCalendars, 30*60*1000);
 loadFromServer();                               // 2. Pull server state async — applies if newer
 
+// Re-sync when tab becomes visible again (phone switching back to dashboard)
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible') loadFromServer();
+});
+
+// Periodic re-sync every 60 seconds — keeps mobile in sync without manual refresh
+setInterval(loadFromServer, 60000);
+
 // Restore saved workspace and column visibility
 (function initColumns(){
   const ws = S.ws || 'all';
