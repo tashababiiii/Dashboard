@@ -52,11 +52,15 @@ async function getUserEmail(req) {
   // Fallback: fetch from Google userinfo for old sessions
   if (!tokens.access_token) return { email: null, step: 'no_access_token' };
   try {
+    // Add 5s timeout so mobile doesn't hang waiting for Google
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('timeout')), 5000)
+    );
     const client = getOAuth2Client();
     const refreshed = await refreshTokenIfNeeded(tokens);
     client.setCredentials(refreshed);
     const oauth2 = google.oauth2({ version: 'v2', auth: client });
-    const { data } = await oauth2.userinfo.get();
+    const { data } = await Promise.race([oauth2.userinfo.get(), timeoutPromise]);
     const email = data.email?.toLowerCase();
     if (!email) return { email: null, step: 'userinfo_no_email' };
     if (!ALLOWED_EMAILS.includes(email)) return { email: null, step: 'email_not_allowed' };
